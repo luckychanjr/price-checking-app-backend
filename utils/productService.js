@@ -1,5 +1,5 @@
-import { searchBestBuy, getBestBuyById } from "./bestbuy.js";
-import { searchWalmart, getWalmartById } from "./walmart.js";
+import { searchBestBuy, getBestBuyById } from "../retailers/bestbuy.js";
+import { searchWalmart, getWalmartById } from "../retailers/walmart.js";
 import { parseRetailerUrl } from "./parseUrl.js";
 
 export async function getProductAcrossRetailers(input) {

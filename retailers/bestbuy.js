@@ -1,3 +1,13 @@
+export function extractBestBuyId(url) {
+  let match = url.match(/\/(\d+)\.p/);
+  if (match) return match[1];
+
+  match = url.match(/\/sku\/(\d+)/);
+  if (match) return match[1];
+
+  return null;
+}
+
 export async function searchBestBuy(query) {
   const API_KEY = process.env.BESTBUY_API_KEY;
 

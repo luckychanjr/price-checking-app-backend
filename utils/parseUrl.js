@@ -17,13 +17,14 @@
 
   throw new Error("Unsupported retailer");
 }*/
+
+import { extractBestBuyId } from "./bestbuy.js";
+
 export function parseRetailerUrl(url) {
   if (url.includes("bestbuy.com")) {
-    const match = url.match(/\/(\d+)\.p/);
-
     return {
       retailer: "BestBuy",
-      id: match?.[1] || null
+      id: extractBestBuyId(url)
     };
   }
 
@@ -36,5 +37,5 @@ export function parseRetailerUrl(url) {
     };
   }
 
-  throw new Error("Unsupported retailer URL");
+  throw new Error("Unsupported retailer");
 }
