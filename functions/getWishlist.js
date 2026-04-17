@@ -1,14 +1,14 @@
-import AWS from "aws-sdk";
-
-const dynamo = new AWS.DynamoDB.DocumentClient();
+import { ScanCommand } from "@aws-sdk/lib-dynamodb";
 
 export const handler = async () => {
-  const result = await dynamo.scan({
-    TableName: "WishlistItems"
-  }).promise();
+  const data = await dynamo.send(
+    new ScanCommand({
+      TableName: "Wishlist"
+    })
+  );
 
   return {
     statusCode: 200,
-    body: JSON.stringify(result.Items)
+    body: JSON.stringify(data.Items)
   };
 };
