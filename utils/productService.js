@@ -34,6 +34,10 @@ export async function getProductAcrossRetailers(input) {
   // 3. Cluster matches into one product group
   const cluster = clusterProducts(allResults, seedProductName || query);
 
+  if (!cluster || cluster.length === 0) {
+    throw new Error("No product offers found");
+  }
+
   // 4. Sort offers by price
   const sortedOffers = cluster.sort((a, b) => a.price - b.price);
 

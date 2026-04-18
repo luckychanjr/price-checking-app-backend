@@ -38,5 +38,5 @@ export function clusterProducts(products, seedName) {
     );
   }
 
-  return clusters[0];
+  return clusters[0] || [];
 }
