@@ -1,6 +1,23 @@
-function normalize(str) {
-  return str.toLowerCase().replace(/[^a-z0-9\s]/g, "");
-}
+/*
+clusterProducts(products, seedName)
+Groups products into clusters
+Uses pairwise similarity
+Then selects the “best cluster” relative to a seed
+
+This is closer to:
+
+deduping + grouping + fuzzy clustering logic
+
+👉 This is useful when:
+
+You have messy multi-retailer results
+You want to group variants (same product, different listings)
+You’re doing aggregation across Walmart / BestBuy / etc.
+
+So the old file is more like:
+
+product grouping / clustering engine
+*/
 
 function similarity(a, b) {
   const aWords = new Set(normalize(a).split(" "));

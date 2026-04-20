@@ -1,34 +1,47 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, PutCommand } from "@aws-sdk/lib-dynamodb";
 import { getProductAcrossRetailers } from "./productService.js";
+import crypto from "crypto";
 
 const client = new DynamoDBClient({});
 const dynamo = DynamoDBDocumentClient.from(client);
 
-const TABLE_NAME = "Wishlist"; // change if needed
+// Use environment variable in Lambda
+const TABLE_NAME = process.env.TABLE_NAME;
 
-const generateId = () => Date.now().toString();
+// Safer unique ID
+const generateId = () => crypto.randomUUID();
 
 export const handler = async (event) => {
   try {
-    const body = JSON.parse(event.body);
-    const input = body.url;
+    const body = JSON.parse(event.body || "{}");
+
+    // ✅ Support BOTH url and query inputs
+    const input = body.url || body.query;
 
     if (!input) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: "Missing URL" })
+        headers: {
+          "Access-Control-Allow-Origin": "*"
+        },
+        body: JSON.stringify({ error: "Missing url or query" })
       };
     }
 
-    // 🔥 1. Get product comparison data
+    // 🔥 1. Fetch product data
     const result = await getProductAcrossRetailers(input);
 
-    // 🔥 2. Build item for DynamoDB
+    // ✅ Validate result before using it
+    if (!result || !result.title || !result.offers) {
+      throw new Error("Invalid product data returned");
+    }
+
+    // 🔥 2. Build DynamoDB item
     const item = {
       id: generateId(),
       title: result.title,
-      image: result.offers[0]?.image || null,
+      image: result.offers?.[0]?.image || null, // safe optional chaining
       createdAt: new Date().toISOString(),
       offers: result.offers
     };
@@ -44,13 +57,23 @@ export const handler = async (event) => {
     // 🔥 4. Return response
     return {
       statusCode: 200,
+      headers: {
+        "Access-Control-Allow-Origin": "*"
+      },
       body: JSON.stringify(item)
     };
 
   } catch (err) {
+    console.error("ERROR:", err);
+
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: err.message })
+      headers: {
+        "Access-Control-Allow-Origin": "*"
+      },
+      body: JSON.stringify({
+        error: err.message || "Internal server error"
+      })
     };
   }
 };
