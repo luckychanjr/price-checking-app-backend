@@ -1,9 +1,8 @@
 import { searchBestBuy, getBestBuyById } from "../retailers/bestbuy.js";
 import { searchWalmart, getWalmartById } from "../retailers/walmart.js";
 import { parseRetailerUrl } from "./parseUrl.js";
-import { clusterProducts } from "./productCluster.js";
+import { clusterProductGroups } from "./productCluster.js";
 
-// Helper: safer URL detection
 const isUrl = (str) => {
   try {
     new URL(str);
@@ -13,11 +12,10 @@ const isUrl = (str) => {
   }
 };
 
-export async function getProductAcrossRetailers(input) {
+async function resolveSearchContext(input) {
   let query = input;
   let seedProductName = null;
 
-  // 🔍 1. If input is a URL → extract product info
   if (isUrl(input)) {
     const parsed = parseRetailerUrl(input);
 
@@ -38,7 +36,40 @@ export async function getProductAcrossRetailers(input) {
     }
   }
 
-  // 🔥 2. Query retailers (fail-safe)
+  return {
+    query,
+    seedProductName
+  };
+}
+
+function summarizeCluster(cluster, sourceInput) {
+  const sortedOffers = cluster
+    .filter(product => typeof product.price === "number")
+    .sort((a, b) => a.price - b.price);
+
+  if (sortedOffers.length === 0) {
+    return null;
+  }
+
+  const bestOffer = sortedOffers[0];
+
+  return {
+    title: bestOffer.name,
+    name: bestOffer.name,
+    image: bestOffer.image || null,
+    url: bestOffer.url || null,
+    sourceInput,
+    cheapestPrice: bestOffer.price,
+    lowestPrice: bestOffer.price,
+    cheapestRetailer: bestOffer.retailer,
+    offers: sortedOffers
+  };
+}
+
+export async function searchProductsAcrossRetailers(input, options = {}) {
+  const { limit = 5 } = options;
+  const { query, seedProductName } = await resolveSearchContext(input);
+
   const results = await Promise.allSettled([
     searchBestBuy(query),
     searchWalmart(query)
@@ -53,27 +84,53 @@ export async function getProductAcrossRetailers(input) {
     throw new Error("No results from any retailer");
   }
 
-  // 🔗 3. Cluster products
-  const cluster = clusterProducts(allResults, seedProductName || query);
+  const clusters = clusterProductGroups(allResults, seedProductName || query);
 
-  if (!cluster || cluster.length === 0) {
+  if (!clusters || clusters.length === 0) {
     throw new Error("No product offers found after clustering");
   }
 
-  // 💰 4. Sort by price (safe)
-  const sortedOffers = cluster
-    .filter(p => typeof p.price === "number")
-    .sort((a, b) => a.price - b.price);
+  const summarizedResults = clusters
+    .map(cluster => summarizeCluster(cluster, input))
+    .filter(Boolean)
+    .slice(0, limit);
 
-  if (sortedOffers.length === 0) {
+  if (summarizedResults.length === 0) {
     throw new Error("No valid priced offers found");
   }
 
-  // 🧾 5. Return normalized structure
+  return summarizedResults;
+}
+
+export async function getProductAcrossRetailers(input) {
+  const results = await searchProductsAcrossRetailers(input, { limit: 1 });
+  return results[0];
+}
+
+export function buildWishlistItemFromProduct(product) {
+  if (!product || !(product.title || product.name) || !Array.isArray(product.offers)) {
+    throw new Error("Invalid selected product");
+  }
+
+  const sortedOffers = product.offers
+    .filter(offer => typeof offer?.price === "number")
+    .sort((a, b) => a.price - b.price);
+
+  if (sortedOffers.length === 0) {
+    throw new Error("Selected product does not contain valid offers");
+  }
+
+  const bestOffer = sortedOffers[0];
+
   return {
-    title: sortedOffers[0].name,
-    cheapestPrice: sortedOffers[0].price,
-    cheapestRetailer: sortedOffers[0].retailer,
+    title: product.title || product.name || bestOffer.name,
+    name: product.name || product.title || bestOffer.name,
+    image: product.image || bestOffer.image || null,
+    url: product.url || bestOffer.url || null,
+    sourceInput: product.sourceInput || product.url || product.name || product.title || "",
+    cheapestPrice: Number(product.cheapestPrice ?? product.lowestPrice ?? bestOffer.price),
+    lowestPrice: Number(product.lowestPrice ?? product.cheapestPrice ?? bestOffer.price),
+    cheapestRetailer: product.cheapestRetailer || bestOffer.retailer,
     offers: sortedOffers
   };
 }

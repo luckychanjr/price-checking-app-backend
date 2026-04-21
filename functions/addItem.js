@@ -1,25 +1,25 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, PutCommand } from "@aws-sdk/lib-dynamodb";
-import { getProductAcrossRetailers } from "../utils/productService.js";
+import {
+  buildWishlistItemFromProduct,
+  getProductAcrossRetailers
+} from "../utils/productService.js";
 import crypto from "crypto";
 
 const client = new DynamoDBClient({});
 const dynamo = DynamoDBDocumentClient.from(client);
 
-// Use environment variable in Lambda
 const TABLE_NAME = process.env.TABLE_NAME;
 
-// Safer unique ID
 const generateId = () => crypto.randomUUID();
 
 export const handler = async (event) => {
   try {
     const body = JSON.parse(event.body || "{}");
-
-    // ✅ Support BOTH url and query inputs
     const input = body.url || body.query;
+    const selectedProduct = body.selectedProduct;
 
-    if (!input) {
+    if (!input && !selectedProduct) {
       return {
         statusCode: 400,
         headers: {
@@ -29,34 +29,32 @@ export const handler = async (event) => {
       };
     }
 
-    // 🔥 1. Fetch product data
-    const result = await getProductAcrossRetailers(input);
+    const result = selectedProduct
+      ? buildWishlistItemFromProduct(selectedProduct)
+      : await getProductAcrossRetailers(input);
 
-    // ✅ Validate result before using it
     if (!result || !result.title || !result.offers) {
       throw new Error("Invalid product data returned");
     }
 
-    // 🔥 2. Build DynamoDB item
     const id = generateId();
     const createdAt = new Date().toISOString();
     const item = {
       id,
       itemId: id,
       title: result.title,
-      name: result.title,
-      sourceInput: input,
-      image: result.offers?.[0]?.image || null,
-      url: result.offers?.[0]?.url || null,
+      name: result.name || result.title,
+      sourceInput: result.sourceInput || input || result.url || result.title,
+      image: result.image || result.offers?.[0]?.image || null,
+      url: result.url || result.offers?.[0]?.url || null,
       cheapestPrice: result.cheapestPrice,
-      lowestPrice: result.cheapestPrice,
+      lowestPrice: result.lowestPrice ?? result.cheapestPrice,
       cheapestRetailer: result.cheapestRetailer,
       createdAt,
       lastUpdated: createdAt,
       offers: result.offers
     };
 
-    // 🔥 3. Save to DynamoDB
     await dynamo.send(
       new PutCommand({
         TableName: TABLE_NAME,
@@ -64,7 +62,6 @@ export const handler = async (event) => {
       })
     );
 
-    // 🔥 4. Return response
     return {
       statusCode: 200,
       headers: {
@@ -72,7 +69,6 @@ export const handler = async (event) => {
       },
       body: JSON.stringify(item)
     };
-
   } catch (err) {
     console.error("ERROR:", err);
 
