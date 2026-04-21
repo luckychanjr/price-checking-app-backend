@@ -45,6 +45,7 @@ export const handler = async (event) => {
       itemId: id,
       title: result.title,
       name: result.title,
+      sourceInput: input,
       image: result.offers?.[0]?.image || null,
       url: result.offers?.[0]?.url || null,
       cheapestPrice: result.cheapestPrice,
