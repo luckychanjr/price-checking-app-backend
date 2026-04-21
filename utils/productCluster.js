@@ -1,3 +1,5 @@
+import { normalize } from "./productNormalizer.js";
+
 /*
 clusterProducts(products, seedName)
 Groups products into clusters

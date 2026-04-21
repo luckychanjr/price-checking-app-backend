@@ -1,3 +1,5 @@
+import { normalize } from "./productNormalizer.js";
+
 /*
 pickBestMatch(query, products)
 Scores each product independently vs query

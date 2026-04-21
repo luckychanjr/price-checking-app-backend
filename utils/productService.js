@@ -1,5 +1,5 @@
-import { searchBestBuy, getBestBuyById } from "./retailers/bestbuy.js";
-import { searchWalmart, getWalmartById } from "./retailers/walmart.js";
+import { searchBestBuy, getBestBuyById } from "../retailers/bestbuy.js";
+import { searchWalmart, getWalmartById } from "../retailers/walmart.js";
 import { parseRetailerUrl } from "./parseUrl.js";
 import { clusterProducts } from "./productCluster.js";
 

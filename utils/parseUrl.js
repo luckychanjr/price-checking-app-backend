@@ -18,7 +18,7 @@
   throw new Error("Unsupported retailer");
 }*/
 
-import { extractBestBuyId } from "./bestbuy.js";
+import { extractBestBuyId } from "../retailers/bestbuy.js";
 
 export function parseRetailerUrl(url) {
   if (url.includes("bestbuy.com")) {

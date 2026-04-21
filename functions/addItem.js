@@ -1,6 +1,6 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, PutCommand } from "@aws-sdk/lib-dynamodb";
-import { getProductAcrossRetailers } from "./productService.js";
+import { getProductAcrossRetailers } from "../utils/productService.js";
 import crypto from "crypto";
 
 const client = new DynamoDBClient({});
@@ -38,11 +38,20 @@ export const handler = async (event) => {
     }
 
     // 🔥 2. Build DynamoDB item
+    const id = generateId();
+    const createdAt = new Date().toISOString();
     const item = {
-      id: generateId(),
+      id,
+      itemId: id,
       title: result.title,
-      image: result.offers?.[0]?.image || null, // safe optional chaining
-      createdAt: new Date().toISOString(),
+      name: result.title,
+      image: result.offers?.[0]?.image || null,
+      url: result.offers?.[0]?.url || null,
+      cheapestPrice: result.cheapestPrice,
+      lowestPrice: result.cheapestPrice,
+      cheapestRetailer: result.cheapestRetailer,
+      createdAt,
+      lastUpdated: createdAt,
       offers: result.offers
     };
 
