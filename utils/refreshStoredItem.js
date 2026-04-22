@@ -1,11 +1,37 @@
 import { getProductAcrossRetailers } from "./productService.js";
 
-export async function refreshStoredItem(currentItem) {
-  const refreshInput =
+function isSupportedRetailerUrl(value) {
+  return (
+    typeof value === "string" &&
+    /https?:\/\/(?:www\.)?(bestbuy\.com|walmart\.com)\//i.test(value)
+  );
+}
+
+function getPreferredRefreshInput(currentItem) {
+  const retailerUrls = [
+    currentItem?.url,
+    ...(Array.isArray(currentItem?.offers) ? currentItem.offers.map(offer => offer?.url) : [])
+  ];
+  const supportedRetailerUrl = retailerUrls.find(isSupportedRetailerUrl);
+  const specificName =
+    typeof currentItem?.name === "string" && currentItem.name && currentItem.name !== "Unknown Item"
+      ? currentItem.name
+      : typeof currentItem?.title === "string" && currentItem.title && currentItem.title !== "Unknown Item"
+        ? currentItem.title
+        : null;
+
+  return (
+    supportedRetailerUrl ||
+    specificName ||
     currentItem?.sourceInput ||
     currentItem?.url ||
     currentItem?.name ||
-    currentItem?.title;
+    currentItem?.title
+  );
+}
+
+export async function refreshStoredItem(currentItem) {
+  const refreshInput = getPreferredRefreshInput(currentItem);
 
   if (!refreshInput) {
     throw new Error("Item does not have refreshable input");

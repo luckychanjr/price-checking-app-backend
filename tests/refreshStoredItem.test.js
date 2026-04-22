@@ -83,4 +83,45 @@ describe("refreshStoredItem", () => {
     expect(updated.image).toBe("tv.jpg");
     expect(updated.url).toBe("https://walmart.com/tv");
   });
+
+  it("prefers a supported retailer URL over a broad saved search query during refresh", async () => {
+    getProductAcrossRetailers.mockResolvedValue({
+      title: "Nintendo Switch OLED",
+      name: "Nintendo Switch OLED",
+      cheapestPrice: 329,
+      lowestPrice: 329,
+      cheapestRetailer: "Walmart",
+      offers: [
+        {
+          retailer: "Walmart",
+          name: "Nintendo Switch OLED",
+          price: 329,
+          url: "https://www.walmart.com/ip/switch-oled",
+          image: "switch.jpg"
+        }
+      ]
+    });
+
+    await refreshStoredItem({
+      id: "switch-1",
+      itemId: "switch-1",
+      name: "Nintendo Switch OLED",
+      title: "Nintendo Switch OLED",
+      sourceInput: "nintendo switch",
+      url: "https://www.walmart.com/ip/switch-oled",
+      cheapestRetailer: "Walmart",
+      offers: [
+        {
+          retailer: "Walmart",
+          name: "Nintendo Switch OLED",
+          price: 329,
+          url: "https://www.walmart.com/ip/switch-oled"
+        }
+      ]
+    });
+
+    expect(getProductAcrossRetailers).toHaveBeenCalledWith(
+      "https://www.walmart.com/ip/switch-oled"
+    );
+  });
 });
