@@ -83,11 +83,18 @@ export async function searchProductsAcrossRetailers(input, options = {}) {
   const { limit = 5 } = options;
   const { query, seedProductName } = await resolveSearchContext(input);
 
+  const retailerLabels = ["BestBuy", "eBay", "Walmart"];
   const results = await Promise.allSettled([
     searchBestBuy(query),
     searchEbay(query),
     searchWalmart(query)
   ]);
+
+  results.forEach((result, index) => {
+    if (result.status === "rejected") {
+      console.error(`${retailerLabels[index]} search failed:`, result.reason);
+    }
+  });
 
   const bestbuy = results[0].status === "fulfilled" ? results[0].value : [];
   const ebay = results[1].status === "fulfilled" ? results[1].value : [];

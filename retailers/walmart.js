@@ -1,11 +1,60 @@
 const WALMART_RAPIDAPI_HOST = "walmart-api4.p.rapidapi.com";
 
+function getRequiredEnv(name) {
+  const value = process.env[name];
+
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+
+  return value;
+}
+
 function buildRapidApiHeaders(apiKey) {
   return {
     "Content-Type": "application/json",
     "X-RapidAPI-Key": apiKey,
     "X-RapidAPI-Host": WALMART_RAPIDAPI_HOST
   };
+}
+
+async function readJsonOrText(response) {
+  const text = await response.text();
+
+  if (!text) {
+    return "";
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
+function formatErrorDetails(details) {
+  if (!details) {
+    return "";
+  }
+
+  if (typeof details === "string") {
+    return details;
+  }
+
+  return details.message || JSON.stringify(details);
+}
+
+async function ensureOk(response, label) {
+  if (response.ok) {
+    return;
+  }
+
+  const details = await readJsonOrText(response);
+  const suffix = formatErrorDetails(details);
+
+  throw new Error(
+    `${label} failed with ${response.status}${suffix ? `: ${suffix}` : ""}`
+  );
 }
 
 function parseWalmartPrice(value) {
@@ -56,15 +105,18 @@ function normalizeSearchItem(item) {
 }
 
 export async function searchWalmart(query) {
-  const API_KEY = process.env.WALMART_RAPIDAPI_KEY;
-  const walmartSearchUrl = `https://www.walmart.com/search?q=${encodeURIComponent(query)}`;
+  const apiKey = getRequiredEnv("WALMART_RAPIDAPI_KEY");
+  const walmartSearchUrl = new URL("https://www.walmart.com/search");
+  walmartSearchUrl.searchParams.set("q", query);
 
   const res = await fetch(
-    `https://${WALMART_RAPIDAPI_HOST}/walmart-serp.php?url=${encodeURIComponent(walmartSearchUrl)}`,
+    `https://${WALMART_RAPIDAPI_HOST}/walmart-serp.php?url=${encodeURIComponent(walmartSearchUrl.toString())}`,
     {
-      headers: buildRapidApiHeaders(API_KEY)
+      headers: buildRapidApiHeaders(apiKey)
     }
   );
+
+  await ensureOk(res, "Walmart search request");
 
   const data = await res.json();
 
@@ -75,15 +127,17 @@ export async function searchWalmart(query) {
 }
 
 export async function getWalmartById(id) {
-  const API_KEY = process.env.WALMART_RAPIDAPI_KEY;
+  const apiKey = getRequiredEnv("WALMART_RAPIDAPI_KEY");
   const productUrl = `https://www.walmart.com/ip/${id}`;
 
   const res = await fetch(
     `https://${WALMART_RAPIDAPI_HOST}/product-details.php?url=${encodeURIComponent(productUrl)}`,
     {
-      headers: buildRapidApiHeaders(API_KEY)
+      headers: buildRapidApiHeaders(apiKey)
     }
   );
+
+  await ensureOk(res, "Walmart product details request");
 
   const data = await res.json();
   const item = data.body;
