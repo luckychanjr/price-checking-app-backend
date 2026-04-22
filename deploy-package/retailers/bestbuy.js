@@ -1,3 +1,20 @@
+const BESTBUY_SEARCH_TIMEOUT_MS = 4000;
+const BESTBUY_PRODUCT_TIMEOUT_MS = 4000;
+
+async function fetchWithTimeout(url, timeoutMs, label) {
+  try {
+    return await fetch(url, {
+      signal: AbortSignal.timeout(timeoutMs)
+    });
+  } catch (err) {
+    if (err?.name === "TimeoutError" || err?.name === "AbortError") {
+      throw new Error(`${label} timed out after ${timeoutMs}ms`);
+    }
+
+    throw err;
+  }
+}
+
 export function extractBestBuyId(url) {
   let match = url.match(/\/(\d+)\.p/);
   if (match) return match[1];
@@ -13,7 +30,7 @@ export async function searchBestBuy(query) {
 
   const url = `https://api.bestbuy.com/v1/products((search=${encodeURIComponent(query)}))?apiKey=${API_KEY}&format=json&pageSize=5`;
 
-  const res = await fetch(url);
+  const res = await fetchWithTimeout(url, BESTBUY_SEARCH_TIMEOUT_MS, "BestBuy search request");
   const data = await res.json();
 
   if (!data.products) return [];
@@ -33,7 +50,7 @@ export async function getBestBuyById(sku) {
 
   const url = `https://api.bestbuy.com/v1/products(sku=${sku})?apiKey=${API_KEY}&format=json`;
 
-  const res = await fetch(url);
+  const res = await fetchWithTimeout(url, BESTBUY_PRODUCT_TIMEOUT_MS, "BestBuy product request");
   const data = await res.json();
 
   const p = data.products?.[0];

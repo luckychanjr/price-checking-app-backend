@@ -1,4 +1,6 @@
 const WALMART_RAPIDAPI_HOST = "walmart-api4.p.rapidapi.com";
+const WALMART_SEARCH_TIMEOUT_MS = 4000;
+const WALMART_PRODUCT_TIMEOUT_MS = 4000;
 
 function getRequiredEnv(name) {
   const value = process.env[name];
@@ -57,6 +59,21 @@ async function ensureOk(response, label) {
   );
 }
 
+async function fetchWithTimeout(url, options, timeoutMs, label) {
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: AbortSignal.timeout(timeoutMs)
+    });
+  } catch (err) {
+    if (err?.name === "TimeoutError" || err?.name === "AbortError") {
+      throw new Error(`${label} timed out after ${timeoutMs}ms`);
+    }
+
+    throw err;
+  }
+}
+
 function parseWalmartPrice(value) {
   if (typeof value === "number") {
     return Number.isFinite(value) ? value : null;
@@ -109,11 +126,13 @@ export async function searchWalmart(query) {
   const walmartSearchUrl = new URL("https://www.walmart.com/search");
   walmartSearchUrl.searchParams.set("q", query);
 
-  const res = await fetch(
+  const res = await fetchWithTimeout(
     `https://${WALMART_RAPIDAPI_HOST}/walmart-serp.php?url=${encodeURIComponent(walmartSearchUrl.toString())}`,
     {
       headers: buildRapidApiHeaders(apiKey)
-    }
+    },
+    WALMART_SEARCH_TIMEOUT_MS,
+    "Walmart search request"
   );
 
   await ensureOk(res, "Walmart search request");
@@ -130,11 +149,13 @@ export async function getWalmartByUrl(productUrl) {
   const apiKey = getRequiredEnv("WALMART_RAPIDAPI_KEY");
   const retailerId = extractWalmartIdFromUrl(productUrl) || productUrl;
 
-  const res = await fetch(
+  const res = await fetchWithTimeout(
     `https://${WALMART_RAPIDAPI_HOST}/product-details.php?url=${encodeURIComponent(productUrl)}`,
     {
       headers: buildRapidApiHeaders(apiKey)
-    }
+    },
+    WALMART_PRODUCT_TIMEOUT_MS,
+    "Walmart product details request"
   );
 
   await ensureOk(res, "Walmart product details request");

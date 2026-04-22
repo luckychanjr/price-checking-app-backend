@@ -1,6 +1,5 @@
 import { searchBestBuy, getBestBuyById } from "../retailers/bestbuy.js";
-import { searchEbay } from "../retailers/ebay.js";
-import { getWalmartById, getWalmartByUrl, searchWalmart } from "../retailers/walmart.js";
+import { getWalmartByUrl, searchWalmart } from "../retailers/walmart.js";
 import { parseRetailerUrl } from "./parseUrl.js";
 import { clusterProductGroups } from "./productCluster.js";
 
@@ -83,10 +82,9 @@ export async function searchProductsAcrossRetailers(input, options = {}) {
   const { limit = 5 } = options;
   const { query, seedProductName } = await resolveSearchContext(input);
 
-  const retailerLabels = ["BestBuy", "eBay", "Walmart"];
+  const retailerLabels = ["BestBuy", "Walmart"];
   const results = await Promise.allSettled([
     searchBestBuy(query),
-    searchEbay(query),
     searchWalmart(query)
   ]);
 
@@ -97,10 +95,9 @@ export async function searchProductsAcrossRetailers(input, options = {}) {
   });
 
   const bestbuy = results[0].status === "fulfilled" ? results[0].value : [];
-  const ebay = results[1].status === "fulfilled" ? results[1].value : [];
-  const walmart = results[2].status === "fulfilled" ? results[2].value : [];
+  const walmart = results[1].status === "fulfilled" ? results[1].value : [];
 
-  const allResults = [...bestbuy, ...ebay, ...walmart].filter(Boolean);
+  const allResults = [...bestbuy, ...walmart].filter(Boolean);
 
   if (allResults.length === 0) {
     throw new Error("No results from any retailer");

@@ -31,13 +31,14 @@ describe("Walmart retailer adapter", () => {
 
     expect(fetch).toHaveBeenCalledWith(
       "https://walmart-api4.p.rapidapi.com/walmart-serp.php?url=https%3A%2F%2Fwww.walmart.com%2Fsearch%3Fq%3Dlaptop",
-      {
+      expect.objectContaining({
         headers: {
           "Content-Type": "application/json",
           "X-RapidAPI-Key": "test-key",
           "X-RapidAPI-Host": "walmart-api4.p.rapidapi.com"
-        }
-      }
+        },
+        signal: expect.anything()
+      })
     );
     expect(results).toEqual([
       {
@@ -108,13 +109,14 @@ describe("Walmart retailer adapter", () => {
 
     expect(fetch).toHaveBeenCalledWith(
       "https://walmart-api4.p.rapidapi.com/product-details.php?url=https%3A%2F%2Fwww.walmart.com%2Fip%2Fw-123",
-      {
+      expect.objectContaining({
         headers: {
           "Content-Type": "application/json",
           "X-RapidAPI-Key": "test-key",
           "X-RapidAPI-Host": "walmart-api4.p.rapidapi.com"
-        }
-      }
+        },
+        signal: expect.anything()
+      })
     );
     expect(result).toEqual({
       retailer: "Walmart",
@@ -144,13 +146,14 @@ describe("Walmart retailer adapter", () => {
 
     expect(fetch).toHaveBeenCalledWith(
       `https://walmart-api4.p.rapidapi.com/product-details.php?url=${encodeURIComponent(productUrl)}`,
-      {
+      expect.objectContaining({
         headers: {
           "Content-Type": "application/json",
           "X-RapidAPI-Key": "test-key",
           "X-RapidAPI-Host": "walmart-api4.p.rapidapi.com"
-        }
-      }
+        },
+        signal: expect.anything()
+      })
     );
     expect(result).toEqual({
       retailer: "Walmart",
