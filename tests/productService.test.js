@@ -135,4 +135,31 @@ describe("productService aggregation", () => {
       "2026 11-inch iPad Air M4 Wi-Fi 128GB Purple"
     );
   });
+
+  it("includes the resolved Walmart URL product even when retailer searches return no matches", async () => {
+    getWalmartByUrl.mockResolvedValue({
+      retailer: "Walmart",
+      retailerId: "19659462511",
+      name: "2026 11-inch iPad Air M4 Wi-Fi 128GB Purple",
+      price: 599,
+      url: "https://www.walmart.com/ip/2026-11-inch-iPad-Air-M4-Wi-Fi-128GB-Purple/19659462511",
+      image: "walmart-ipad.jpg"
+    });
+    searchBestBuy.mockResolvedValue([]);
+    searchWalmart.mockResolvedValue([]);
+
+    const results = await searchProductsAcrossRetailers(
+      "https://www.walmart.com/ip/2026-11-inch-iPad-Air-M4-Wi-Fi-128GB-Purple/19659462511"
+    );
+
+    expect(results).toHaveLength(1);
+    expect(results[0].cheapestRetailer).toBe("Walmart");
+    expect(results[0].offers).toEqual([
+      expect.objectContaining({
+        retailer: "Walmart",
+        retailerId: "19659462511",
+        price: 599
+      })
+    ]);
+  });
 });

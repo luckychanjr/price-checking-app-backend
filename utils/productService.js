@@ -15,6 +15,7 @@ const isUrl = (str) => {
 async function resolveSearchContext(input) {
   let query = input;
   let seedProductName = null;
+  let seedProduct = null;
 
   if (isUrl(input)) {
     try {
@@ -24,6 +25,7 @@ async function resolveSearchContext(input) {
         try {
           const product = await getBestBuyById(parsed.id);
           if (product?.name) {
+            seedProduct = product;
             seedProductName = product.name;
             query = product.name;
           }
@@ -36,6 +38,7 @@ async function resolveSearchContext(input) {
         try {
           const product = await getWalmartByUrl(input);
           if (product?.name) {
+            seedProduct = product;
             seedProductName = product.name;
             query = product.name;
           }
@@ -50,8 +53,27 @@ async function resolveSearchContext(input) {
 
   return {
     query,
-    seedProductName
+    seedProductName,
+    seedProduct
   };
+}
+
+function dedupeProducts(products) {
+  const seen = new Set();
+
+  return products.filter((product) => {
+    if (!product) {
+      return false;
+    }
+
+    const key = `${product.retailer || "unknown"}::${product.retailerId || product.url || product.name}`;
+    if (seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
 }
 
 function summarizeCluster(cluster, sourceInput) {
@@ -80,7 +102,7 @@ function summarizeCluster(cluster, sourceInput) {
 
 export async function searchProductsAcrossRetailers(input, options = {}) {
   const { limit = 5 } = options;
-  const { query, seedProductName } = await resolveSearchContext(input);
+  const { query, seedProductName, seedProduct } = await resolveSearchContext(input);
 
   const retailerLabels = ["BestBuy", "Walmart"];
   const results = await Promise.allSettled([
@@ -97,7 +119,7 @@ export async function searchProductsAcrossRetailers(input, options = {}) {
   const bestbuy = results[0].status === "fulfilled" ? results[0].value : [];
   const walmart = results[1].status === "fulfilled" ? results[1].value : [];
 
-  const allResults = [...bestbuy, ...walmart].filter(Boolean);
+  const allResults = dedupeProducts([seedProduct, ...bestbuy, ...walmart]);
 
   if (allResults.length === 0) {
     throw new Error("No results from any retailer");
