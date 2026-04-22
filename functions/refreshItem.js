@@ -1,9 +1,11 @@
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
+import { PutCommand } from "@aws-sdk/lib-dynamodb";
 import { refreshStoredItem } from "../utils/refreshStoredItem.js";
-
-const client = new DynamoDBClient({});
-const dynamo = DynamoDBDocumentClient.from(client);
+import {
+  buildWishlistItemKey,
+  dynamo,
+  findWishlistItemById,
+  getWishlistTableKeySchema
+} from "../utils/dynamoWishlist.js";
 
 const TABLE_NAME = process.env.TABLE_NAME;
 
@@ -21,16 +23,9 @@ export const handler = async (event) => {
       };
     }
 
-    const existing = await dynamo.send(
-      new GetCommand({
-        TableName: TABLE_NAME,
-        Key: {
-          id: itemId
-        }
-      })
-    );
+    const existingItem = await findWishlistItemById(TABLE_NAME, itemId);
 
-    if (!existing.Item) {
+    if (!existingItem) {
       return {
         statusCode: 404,
         headers: {
@@ -40,12 +35,23 @@ export const handler = async (event) => {
       };
     }
 
-    const updatedItem = await refreshStoredItem(existing.Item);
+    const keySchema = await getWishlistTableKeySchema(TABLE_NAME);
+    const updatedItem = await refreshStoredItem(existingItem);
+
+    updatedItem[keySchema.partitionKey] = existingItem[keySchema.partitionKey];
+    if (keySchema.sortKey) {
+      updatedItem[keySchema.sortKey] = existingItem[keySchema.sortKey];
+    }
+    updatedItem.itemId = existingItem.itemId || existingItem.id || updatedItem.itemId;
+    updatedItem.id = existingItem.id || existingItem.itemId || updatedItem.id;
 
     await dynamo.send(
       new PutCommand({
         TableName: TABLE_NAME,
-        Item: updatedItem
+        Item: {
+          ...updatedItem,
+          ...buildWishlistItemKey(existingItem, keySchema)
+        }
       })
     );
 
