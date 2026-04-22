@@ -1,4 +1,4 @@
-import { getWalmartById, searchWalmart } from "../retailers/walmart.js";
+import { getWalmartById, getWalmartByUrl, searchWalmart } from "../retailers/walmart.js";
 
 global.fetch = jest.fn();
 
@@ -123,6 +123,42 @@ describe("Walmart retailer adapter", () => {
       price: 299,
       url: "https://www.walmart.com/ip/w-123",
       image: "tablet.jpg"
+    });
+  });
+
+  it("getWalmartByUrl preserves the canonical Walmart URL when looking up product details", async () => {
+    fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        body: {
+          title: "2026 11-inch iPad Air M4 Wi-Fi 128GB Purple",
+          price: "$599.00",
+          images: ["ipad-air.jpg"]
+        }
+      })
+    });
+
+    const productUrl =
+      "https://www.walmart.com/ip/2026-11-inch-iPad-Air-M4-Wi-Fi-128GB-Purple/19659462511";
+    const result = await getWalmartByUrl(productUrl);
+
+    expect(fetch).toHaveBeenCalledWith(
+      `https://walmart-api4.p.rapidapi.com/product-details.php?url=${encodeURIComponent(productUrl)}`,
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "X-RapidAPI-Key": "test-key",
+          "X-RapidAPI-Host": "walmart-api4.p.rapidapi.com"
+        }
+      }
+    );
+    expect(result).toEqual({
+      retailer: "Walmart",
+      retailerId: "19659462511",
+      name: "2026 11-inch iPad Air M4 Wi-Fi 128GB Purple",
+      price: 599,
+      url: productUrl,
+      image: "ipad-air.jpg"
     });
   });
 

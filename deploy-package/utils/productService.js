@@ -1,6 +1,6 @@
 import { searchBestBuy, getBestBuyById } from "../retailers/bestbuy.js";
 import { searchEbay } from "../retailers/ebay.js";
-import { getWalmartById, searchWalmart } from "../retailers/walmart.js";
+import { getWalmartById, getWalmartByUrl, searchWalmart } from "../retailers/walmart.js";
 import { parseRetailerUrl } from "./parseUrl.js";
 import { clusterProductGroups } from "./productCluster.js";
 
@@ -35,7 +35,7 @@ async function resolveSearchContext(input) {
 
       if (parsed?.retailer === "Walmart" && parsed?.id) {
         try {
-          const product = await getWalmartById(parsed.id);
+          const product = await getWalmartByUrl(input);
           if (product?.name) {
             seedProductName = product.name;
             query = product.name;

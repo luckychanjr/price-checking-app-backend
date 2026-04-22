@@ -126,9 +126,9 @@ export async function searchWalmart(query) {
     .filter((item) => item.name);
 }
 
-export async function getWalmartById(id) {
+export async function getWalmartByUrl(productUrl) {
   const apiKey = getRequiredEnv("WALMART_RAPIDAPI_KEY");
-  const productUrl = `https://www.walmart.com/ip/${id}`;
+  const retailerId = extractWalmartIdFromUrl(productUrl) || productUrl;
 
   const res = await fetch(
     `https://${WALMART_RAPIDAPI_HOST}/product-details.php?url=${encodeURIComponent(productUrl)}`,
@@ -146,10 +146,15 @@ export async function getWalmartById(id) {
 
   return {
     retailer: "Walmart",
-    retailerId: id,
+    retailerId,
     name: item.title,
     price: parseWalmartPrice(item.price),
     url: productUrl,
     image: item.images?.[0] || null
   };
+}
+
+export async function getWalmartById(id) {
+  const productUrl = `https://www.walmart.com/ip/${id}`;
+  return getWalmartByUrl(productUrl);
 }
