@@ -58,6 +58,13 @@ export const handler = async (event = {}) => {
       }
     }
 
+    console.log("scheduledRefresh result", {
+      scannedCount: items.length,
+      refreshedCount,
+      failedCount: failures.length,
+      failures
+    });
+
     return {
       statusCode: 200,
       body: JSON.stringify({
