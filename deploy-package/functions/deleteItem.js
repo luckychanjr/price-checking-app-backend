@@ -1,8 +1,10 @@
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, DeleteCommand } from "@aws-sdk/lib-dynamodb";
-
-const client = new DynamoDBClient({});
-const dynamo = DynamoDBDocumentClient.from(client);
+import { DeleteCommand } from "@aws-sdk/lib-dynamodb";
+import {
+  buildWishlistItemKey,
+  dynamo,
+  findWishlistItemById,
+  getWishlistTableKeySchema
+} from "../utils/dynamoWishlist.js";
 
 const TABLE_NAME = process.env.TABLE_NAME;
 
@@ -20,12 +22,24 @@ export const handler = async (event) => {
       };
     }
 
+    const existingItem = await findWishlistItemById(TABLE_NAME, itemId);
+
+    if (!existingItem) {
+      return {
+        statusCode: 404,
+        headers: {
+          "Access-Control-Allow-Origin": "*"
+        },
+        body: JSON.stringify({ error: "Item not found" })
+      };
+    }
+
+    const keySchema = await getWishlistTableKeySchema(TABLE_NAME);
+
     await dynamo.send(
       new DeleteCommand({
         TableName: TABLE_NAME,
-        Key: {
-          id: itemId
-        }
+        Key: buildWishlistItemKey(existingItem, keySchema)
       })
     );
 
