@@ -1,5 +1,6 @@
 import { searchBestBuy, getBestBuyById } from "../retailers/bestbuy.js";
-import { searchWalmart, getWalmartById } from "../retailers/walmart.js";
+import { searchEbay } from "../retailers/ebay.js";
+import { getWalmartById, searchWalmart } from "../retailers/walmart.js";
 import { parseRetailerUrl } from "./parseUrl.js";
 import { clusterProductGroups } from "./productCluster.js";
 
@@ -17,22 +18,34 @@ async function resolveSearchContext(input) {
   let seedProductName = null;
 
   if (isUrl(input)) {
-    const parsed = parseRetailerUrl(input);
+    try {
+      const parsed = parseRetailerUrl(input);
 
-    if (parsed?.retailer === "BestBuy" && parsed?.id) {
-      const product = await getBestBuyById(parsed.id);
-      if (product?.name) {
-        seedProductName = product.name;
-        query = product.name;
+      if (parsed?.retailer === "BestBuy" && parsed?.id) {
+        try {
+          const product = await getBestBuyById(parsed.id);
+          if (product?.name) {
+            seedProductName = product.name;
+            query = product.name;
+          }
+        } catch {
+          // Fall back to the original input when a retailer lookup is unavailable.
+        }
       }
-    }
 
-    if (parsed?.retailer === "Walmart" && parsed?.id) {
-      const product = await getWalmartById(parsed.id);
-      if (product?.name) {
-        seedProductName = product.name;
-        query = product.name;
+      if (parsed?.retailer === "Walmart" && parsed?.id) {
+        try {
+          const product = await getWalmartById(parsed.id);
+          if (product?.name) {
+            seedProductName = product.name;
+            query = product.name;
+          }
+        } catch {
+          // Fall back to the original input when a retailer lookup is unavailable.
+        }
       }
+    } catch {
+      // Unsupported URLs can continue as plain search input.
     }
   }
 
@@ -72,13 +85,15 @@ export async function searchProductsAcrossRetailers(input, options = {}) {
 
   const results = await Promise.allSettled([
     searchBestBuy(query),
+    searchEbay(query),
     searchWalmart(query)
   ]);
 
   const bestbuy = results[0].status === "fulfilled" ? results[0].value : [];
-  const walmart = results[1].status === "fulfilled" ? results[1].value : [];
+  const ebay = results[1].status === "fulfilled" ? results[1].value : [];
+  const walmart = results[2].status === "fulfilled" ? results[2].value : [];
 
-  const allResults = [...bestbuy, ...walmart].filter(Boolean);
+  const allResults = [...bestbuy, ...ebay, ...walmart].filter(Boolean);
 
   if (allResults.length === 0) {
     throw new Error("No results from any retailer");

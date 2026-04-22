@@ -3,12 +3,17 @@ jest.mock("../retailers/bestbuy.js", () => ({
   getBestBuyById: jest.fn()
 }));
 
+jest.mock("../retailers/ebay.js", () => ({
+  searchEbay: jest.fn()
+}));
+
 jest.mock("../retailers/walmart.js", () => ({
   searchWalmart: jest.fn(),
   getWalmartById: jest.fn()
 }));
 
 import { searchBestBuy } from "../retailers/bestbuy.js";
+import { searchEbay } from "../retailers/ebay.js";
 import { searchWalmart } from "../retailers/walmart.js";
 import {
   getProductAcrossRetailers,
@@ -20,7 +25,7 @@ describe("productService aggregation", () => {
     jest.clearAllMocks();
   });
 
-  it("includes Walmart offers in clustered cross-retailer results", async () => {
+  it("includes eBay and Walmart offers in clustered cross-retailer results", async () => {
     searchBestBuy.mockResolvedValue([
       {
         retailer: "BestBuy",
@@ -29,6 +34,17 @@ describe("productService aggregation", () => {
         price: 599,
         url: "https://bestbuy.com/ipad-air",
         image: "bestbuy.jpg"
+      }
+    ]);
+
+    searchEbay.mockResolvedValue([
+      {
+        retailer: "eBay",
+        retailerId: "ebay-1",
+        name: "Apple iPad Air M3 11 inch 128GB",
+        price: 589,
+        url: "https://ebay.com/ipad-air",
+        image: "ebay.jpg"
       }
     ]);
 
@@ -47,9 +63,10 @@ describe("productService aggregation", () => {
 
     expect(results).toHaveLength(1);
     expect(results[0].cheapestRetailer).toBe("Walmart");
-    expect(results[0].offers).toHaveLength(2);
+    expect(results[0].offers).toHaveLength(3);
     expect(results[0].offers.map((offer) => offer.retailer)).toEqual([
       "Walmart",
+      "eBay",
       "BestBuy"
     ]);
   });
@@ -63,6 +80,17 @@ describe("productService aggregation", () => {
         price: 699,
         url: "https://bestbuy.com/tv",
         image: "tv-bestbuy.jpg"
+      }
+    ]);
+
+    searchEbay.mockResolvedValue([
+      {
+        retailer: "eBay",
+        retailerId: "ebay-2",
+        name: "Samsung 55-inch QLED 4K Smart TV",
+        price: 659,
+        url: "https://ebay.com/tv",
+        image: "tv-ebay.jpg"
       }
     ]);
 
@@ -81,11 +109,12 @@ describe("productService aggregation", () => {
 
     expect(result.cheapestRetailer).toBe("Walmart");
     expect(result.lowestPrice).toBe(649);
-    expect(result.offers).toHaveLength(2);
+    expect(result.offers).toHaveLength(3);
   });
 
   it("throws when neither retailer returns results", async () => {
     searchBestBuy.mockResolvedValue([]);
+    searchEbay.mockResolvedValue([]);
     searchWalmart.mockResolvedValue([]);
 
     await expect(searchProductsAcrossRetailers("unknown product")).rejects.toThrow(

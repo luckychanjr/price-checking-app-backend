@@ -11,26 +11,30 @@ describe("Walmart retailer adapter", () => {
   it("searchWalmart returns normalized Walmart products and uses RapidAPI headers", async () => {
     fetch.mockResolvedValue({
       json: async () => ({
-        results: [
-          {
-            id: "abc",
-            name: "Walmart Laptop",
-            price: 899,
-            url: "https://walmart.com/item",
-            image: "img.jpg"
-          }
-        ]
+        body: {
+          products: [
+            {
+              title: "Walmart Laptop",
+              price: {
+                currentPrice: "$899.00"
+              },
+              link: "https://www.walmart.com/ip/abc",
+              image: "img.jpg"
+            }
+          ]
+        }
       })
     });
 
     const results = await searchWalmart("laptop");
 
     expect(fetch).toHaveBeenCalledWith(
-      "https://walmart-api.p.rapidapi.com/search?query=laptop",
+      "https://walmart-api4.p.rapidapi.com/walmart-serp.php?url=https%3A%2F%2Fwww.walmart.com%2Fsearch%3Fq%3Dlaptop",
       {
         headers: {
+          "Content-Type": "application/json",
           "X-RapidAPI-Key": "test-key",
-          "X-RapidAPI-Host": "walmart-api.p.rapidapi.com"
+          "X-RapidAPI-Host": "walmart-api4.p.rapidapi.com"
         }
       }
     );
@@ -40,7 +44,7 @@ describe("Walmart retailer adapter", () => {
         retailerId: "abc",
         name: "Walmart Laptop",
         price: 899,
-        url: "https://walmart.com/item",
+        url: "https://www.walmart.com/ip/abc",
         image: "img.jpg"
       }
     ]);
@@ -49,13 +53,16 @@ describe("Walmart retailer adapter", () => {
   it("searchWalmart limits results to five items", async () => {
     fetch.mockResolvedValue({
       json: async () => ({
-        results: Array.from({ length: 7 }, (_, index) => ({
-          id: `id-${index}`,
-          name: `Item ${index}`,
-          price: index + 10,
-          url: `https://walmart.com/item-${index}`,
-          image: `img-${index}.jpg`
-        }))
+        body: {
+          products: Array.from({ length: 7 }, (_, index) => ({
+            title: `Item ${index}`,
+            price: {
+              currentPrice: `$${index + 10}.00`
+            },
+            link: `https://www.walmart.com/ip/id-${index}`,
+            image: `img-${index}.jpg`
+          }))
+        }
       })
     });
 
@@ -68,26 +75,23 @@ describe("Walmart retailer adapter", () => {
   it("getWalmartById returns the first normalized result", async () => {
     fetch.mockResolvedValue({
       json: async () => ({
-        results: [
-          {
-            id: "w-123",
-            name: "Walmart Tablet",
-            price: 299,
-            url: "https://walmart.com/tablet",
-            image: "tablet.jpg"
-          }
-        ]
+        body: {
+          title: "Walmart Tablet",
+          price: "$299.00",
+          images: ["tablet.jpg"]
+        }
       })
     });
 
     const result = await getWalmartById("w-123");
 
     expect(fetch).toHaveBeenCalledWith(
-      "https://walmart-api.p.rapidapi.com/search?query=w-123",
+      "https://walmart-api4.p.rapidapi.com/product-details.php?url=https%3A%2F%2Fwww.walmart.com%2Fip%2Fw-123",
       {
         headers: {
+          "Content-Type": "application/json",
           "X-RapidAPI-Key": "test-key",
-          "X-RapidAPI-Host": "walmart-api.p.rapidapi.com"
+          "X-RapidAPI-Host": "walmart-api4.p.rapidapi.com"
         }
       }
     );
@@ -96,7 +100,7 @@ describe("Walmart retailer adapter", () => {
       retailerId: "w-123",
       name: "Walmart Tablet",
       price: 299,
-      url: "https://walmart.com/tablet",
+      url: "https://www.walmart.com/ip/w-123",
       image: "tablet.jpg"
     });
   });
@@ -104,7 +108,7 @@ describe("Walmart retailer adapter", () => {
   it("getWalmartById throws when Walmart returns no results", async () => {
     fetch.mockResolvedValue({
       json: async () => ({
-        results: []
+        body: {}
       })
     });
 

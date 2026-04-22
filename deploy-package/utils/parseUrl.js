@@ -20,6 +20,16 @@
 
 import { extractBestBuyId } from "../retailers/bestbuy.js";
 
+function extractWalmartId(url) {
+  let match = url.match(/\/ip\/(?:[^/]+\/)?([^/?]+)/);
+  if (match) return match[1];
+
+  match = url.match(/[?&]athcpid=([^&]+)/);
+  if (match) return match[1];
+
+  return null;
+}
+
 export function parseRetailerUrl(url) {
   if (url.includes("bestbuy.com")) {
     return {
@@ -29,11 +39,9 @@ export function parseRetailerUrl(url) {
   }
 
   if (url.includes("walmart.com")) {
-    const match = url.match(/\/ip\/(\d+)/);
-
     return {
       retailer: "Walmart",
-      id: match?.[1] || null
+      id: extractWalmartId(url)
     };
   }
 
