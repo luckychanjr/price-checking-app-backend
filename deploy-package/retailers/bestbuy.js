@@ -1,5 +1,30 @@
 const BESTBUY_SEARCH_TIMEOUT_MS = 4000;
 const BESTBUY_PRODUCT_TIMEOUT_MS = 4000;
+const BESTBUY_CANDIDATE_LIMIT = 50;
+const SERVICE_OR_ACCESSORY_TERMS = [
+  "applecare",
+  "apple care",
+  "geek squad protection",
+  "protection plan",
+  "service plan",
+  "warranty",
+  "accidental damage",
+  "screen protector",
+  "case",
+  "cover",
+  "keyboard",
+  "charger",
+  "adapter",
+  "cable"
+];
+const TABLET_TERMS = ["ipad", "tablet"];
+const BESTBUY_FIELDS = [
+  "sku",
+  "name",
+  "salePrice",
+  "url",
+  "image"
+];
 
 async function fetchWithTimeout(url, timeoutMs, label) {
   try {
@@ -25,24 +50,94 @@ export function extractBestBuyId(url) {
   return null;
 }
 
-export async function searchBestBuy(query) {
-  const API_KEY = process.env.BESTBUY_API_KEY;
+function isServiceOrAccessorySearch(query) {
+  const normalizedQuery = String(query ?? "").toLowerCase();
 
-  const url = `https://api.bestbuy.com/v1/products((search=${encodeURIComponent(query)}))?apiKey=${API_KEY}&format=json&pageSize=5`;
+  return SERVICE_OR_ACCESSORY_TERMS.some(term => normalizedQuery.includes(term));
+}
 
-  const res = await fetchWithTimeout(url, BESTBUY_SEARCH_TIMEOUT_MS, "BestBuy search request");
-  const data = await res.json();
+function isServiceOrAccessoryProduct(productName) {
+  const normalizedName = String(productName ?? "").toLowerCase();
 
-  if (!data.products) return [];
+  return SERVICE_OR_ACCESSORY_TERMS.some(term => normalizedName.includes(term));
+}
 
-  return data.products.map((p) => ({
+function shouldRunTabletRetry(query) {
+  const normalizedQuery = String(query ?? "").toLowerCase();
+
+  return TABLET_TERMS.some(term => normalizedQuery.includes(term)) &&
+    !normalizedQuery.includes("tablet");
+}
+
+function normalizeProduct(p) {
+  return {
     retailer: "BestBuy",
     retailerId: p.sku,
     name: p.name,
     price: p.salePrice,
     url: p.url,
     image: p.image
-  }));
+  };
+}
+
+function getSearchTerms(query) {
+  return String(query ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .map(term => term.trim())
+    .filter(Boolean);
+}
+
+function buildBestBuySearchUrl(query, apiKey) {
+  const searchTerms = getSearchTerms(query);
+  const searchExpression = searchTerms.length > 0
+    ? searchTerms.map(term => `search=${encodeURIComponent(term)}`).join("&")
+    : `search=${encodeURIComponent(query)}`;
+
+  return `https://api.bestbuy.com/v1/products(${searchExpression})?apiKey=${apiKey}&format=json&pageSize=${BESTBUY_CANDIDATE_LIMIT}&show=${BESTBUY_FIELDS.join(",")}`;
+}
+
+async function fetchBestBuyProducts(query) {
+  const API_KEY = process.env.BESTBUY_API_KEY;
+
+  const url = buildBestBuySearchUrl(query, API_KEY);
+
+  const res = await fetchWithTimeout(url, BESTBUY_SEARCH_TIMEOUT_MS, "BestBuy search request");
+  const data = await res.json();
+
+  return data.products || [];
+}
+
+function filterBestBuyProducts(products, query) {
+  return products
+    .filter((p) => isServiceOrAccessorySearch(query) || !isServiceOrAccessoryProduct(p.name))
+    .map(normalizeProduct);
+}
+
+function dedupeBySku(products) {
+  const seen = new Set();
+
+  return products.filter(product => {
+    if (!product?.retailerId || seen.has(product.retailerId)) {
+      return false;
+    }
+
+    seen.add(product.retailerId);
+    return true;
+  });
+}
+
+export async function searchBestBuy(query) {
+  const primaryProducts = await fetchBestBuyProducts(query);
+  const primaryMatches = filterBestBuyProducts(primaryProducts, query);
+
+  if (primaryMatches.length > 0 || !shouldRunTabletRetry(query)) {
+    return primaryMatches;
+  }
+
+  const tabletProducts = await fetchBestBuyProducts(`${query} tablet`);
+  return dedupeBySku(filterBestBuyProducts(tabletProducts, query));
 }
 
 export async function getBestBuyById(sku) {

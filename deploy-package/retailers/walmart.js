@@ -111,23 +111,58 @@ function extractWalmartIdFromUrl(url) {
 }
 
 function normalizeSearchItem(item) {
+  const productUrl = item.link || item.url || item.productUrl || item.canonicalUrl || null;
+  const price =
+    parseWalmartPrice(item.price?.currentPrice) ??
+    parseWalmartPrice(item.price?.price) ??
+    parseWalmartPrice(item.price) ??
+    parseWalmartPrice(item.salePrice) ??
+    parseWalmartPrice(item.currentPrice);
+
   return {
     retailer: "Walmart",
-    retailerId: extractWalmartIdFromUrl(item.link) || item.link || null,
-    name: item.title,
-    price: parseWalmartPrice(item.price?.currentPrice),
-    url: item.link || null,
-    image: item.image || null
+    retailerId: String(item.id ?? item.productId ?? item.usItemId ?? extractWalmartIdFromUrl(productUrl) ?? productUrl ?? ""),
+    name: item.title || item.name || item.productName,
+    price,
+    url: productUrl,
+    image: item.image || item.thumbnail || item.imageUrl || item.productImage || null
   };
+}
+
+function findProductArray(value) {
+  if (Array.isArray(value)) {
+    return value;
+  }
+
+  if (!value || typeof value !== "object") {
+    return [];
+  }
+
+  const candidates = [
+    value.body?.products,
+    value.body?.results,
+    value.body?.items,
+    value.products,
+    value.results,
+    value.items,
+    value.data?.products,
+    value.data?.results,
+    value.data?.items,
+    value.searchResult?.itemStacks?.[0]?.items
+  ];
+
+  const arrayCandidate = candidates.find(Array.isArray);
+  return arrayCandidate || [];
 }
 
 export async function searchWalmart(query) {
   const apiKey = getRequiredEnv("WALMART_RAPIDAPI_KEY");
-  const walmartSearchUrl = new URL("https://www.walmart.com/search");
+  const walmartSearchUrl = new URL(`https://${WALMART_RAPIDAPI_HOST}/search`);
   walmartSearchUrl.searchParams.set("q", query);
+  walmartSearchUrl.searchParams.set("page", "1");
 
   const res = await fetchWithTimeout(
-    `https://${WALMART_RAPIDAPI_HOST}/walmart-serp.php?url=${encodeURIComponent(walmartSearchUrl.toString())}`,
+    walmartSearchUrl.toString(),
     {
       headers: buildRapidApiHeaders(apiKey)
     },
@@ -138,11 +173,12 @@ export async function searchWalmart(query) {
   await ensureOk(res, "Walmart search request");
 
   const data = await res.json();
+  const products = findProductArray(data);
 
-  return (data.body?.products || [])
-    .slice(0, 5)
+  return products
+    .slice(0, 20)
     .map(normalizeSearchItem)
-    .filter((item) => item.name);
+    .filter((item) => item.name && typeof item.price === "number");
 }
 
 export async function getWalmartByUrl(productUrl) {

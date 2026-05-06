@@ -15,7 +15,15 @@ export const handler = async (event) => {
       };
     }
 
-    const results = await searchProductsAcrossRetailers(input);
+    let results = [];
+
+    try {
+      results = await searchProductsAcrossRetailers(input);
+    } catch (err) {
+      if (err.message !== "No results from any retailer") {
+        throw err;
+      }
+    }
 
     return {
       statusCode: 200,

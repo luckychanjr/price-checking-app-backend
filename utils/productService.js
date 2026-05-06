@@ -1,7 +1,25 @@
 import { searchBestBuy, getBestBuyById } from "../retailers/bestbuy.js";
 import { getWalmartByUrl, searchWalmart } from "../retailers/walmart.js";
 import { parseRetailerUrl } from "./parseUrl.js";
-import { clusterProductGroups } from "./productCluster.js";
+import {
+  clusterProductGroups,
+  scoreProductSimilarity
+} from "./productCluster.js";
+
+const DEFAULT_SEARCH_LIMIT = 20;
+const ACCESSORY_TERMS = [
+  "applecare",
+  "apple care",
+  "protection plan",
+  "warranty",
+  "case",
+  "cover",
+  "screen protector",
+  "keyboard",
+  "charger",
+  "adapter",
+  "cable"
+];
 
 const isUrl = (str) => {
   try {
@@ -76,7 +94,42 @@ function dedupeProducts(products) {
   });
 }
 
-function summarizeCluster(cluster, sourceInput) {
+function isLikelyAccessory(productName) {
+  const name = String(productName ?? "").toLowerCase();
+
+  return ACCESSORY_TERMS.some(term => name.includes(term));
+}
+
+function isAccessorySearch(query) {
+  return isLikelyAccessory(query);
+}
+
+function getProductRelevance(product, query) {
+  const similarity = scoreProductSimilarity(product.name, query);
+  const accessoryPenalty = isLikelyAccessory(product.name) ? 6 : 0;
+
+  return similarity - accessoryPenalty;
+}
+
+function getClusterRelevance(cluster, query) {
+  return Math.max(
+    ...cluster.map(product => getProductRelevance(product, query))
+  );
+}
+
+function pickRepresentativeOffer(cluster, query) {
+  return [...cluster].sort((a, b) => {
+    const relevanceDelta = getProductRelevance(b, query) - getProductRelevance(a, query);
+
+    if (relevanceDelta !== 0) {
+      return relevanceDelta;
+    }
+
+    return (a.price ?? Number.POSITIVE_INFINITY) - (b.price ?? Number.POSITIVE_INFINITY);
+  })[0];
+}
+
+function summarizeCluster(cluster, sourceInput, query) {
   const sortedOffers = cluster
     .filter(product => typeof product.price === "number")
     .sort((a, b) => a.price - b.price);
@@ -86,12 +139,13 @@ function summarizeCluster(cluster, sourceInput) {
   }
 
   const bestOffer = sortedOffers[0];
+  const representativeOffer = pickRepresentativeOffer(sortedOffers, query) || bestOffer;
 
   return {
-    title: bestOffer.name,
-    name: bestOffer.name,
-    image: bestOffer.image || null,
-    url: bestOffer.url || null,
+    title: representativeOffer.name,
+    name: representativeOffer.name,
+    image: representativeOffer.image || bestOffer.image || null,
+    url: representativeOffer.url || bestOffer.url || null,
     sourceInput,
     cheapestPrice: bestOffer.price,
     lowestPrice: bestOffer.price,
@@ -101,8 +155,9 @@ function summarizeCluster(cluster, sourceInput) {
 }
 
 export async function searchProductsAcrossRetailers(input, options = {}) {
-  const { limit = 5 } = options;
+  const { limit = DEFAULT_SEARCH_LIMIT } = options;
   const { query, seedProductName, seedProduct } = await resolveSearchContext(input);
+  const rankingQuery = seedProductName || query;
 
   const retailerLabels = ["BestBuy", "Walmart"];
   const results = await Promise.allSettled([
@@ -119,20 +174,22 @@ export async function searchProductsAcrossRetailers(input, options = {}) {
   const bestbuy = results[0].status === "fulfilled" ? results[0].value : [];
   const walmart = results[1].status === "fulfilled" ? results[1].value : [];
 
-  const allResults = dedupeProducts([seedProduct, ...bestbuy, ...walmart]);
+  const allResults = dedupeProducts([seedProduct, ...bestbuy, ...walmart])
+    .filter(product => isAccessorySearch(rankingQuery) || !isLikelyAccessory(product.name));
 
   if (allResults.length === 0) {
     throw new Error("No results from any retailer");
   }
 
-  const clusters = clusterProductGroups(allResults, seedProductName || query);
+  const clusters = clusterProductGroups(allResults, rankingQuery)
+    .sort((a, b) => getClusterRelevance(b, rankingQuery) - getClusterRelevance(a, rankingQuery));
 
   if (!clusters || clusters.length === 0) {
     throw new Error("No product offers found after clustering");
   }
 
   const summarizedResults = clusters
-    .map(cluster => summarizeCluster(cluster, input))
+    .map(cluster => summarizeCluster(cluster, input, rankingQuery))
     .filter(Boolean)
     .slice(0, limit);
 

@@ -30,7 +30,7 @@ describe("Walmart retailer adapter", () => {
     const results = await searchWalmart("laptop");
 
     expect(fetch).toHaveBeenCalledWith(
-      "https://walmart-api4.p.rapidapi.com/walmart-serp.php?url=https%3A%2F%2Fwww.walmart.com%2Fsearch%3Fq%3Dlaptop",
+      "https://walmart-api4.p.rapidapi.com/search?q=laptop&page=1",
       expect.objectContaining({
         headers: {
           "Content-Type": "application/json",
@@ -52,12 +52,77 @@ describe("Walmart retailer adapter", () => {
     ]);
   });
 
-  it("searchWalmart limits results to five items", async () => {
+  it("searchWalmart accepts direct search endpoint product fields", async () => {
+    fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        products: [
+          {
+            productId: "12345",
+            name: "Apple iPad Pro 11-inch 256GB",
+            price: "$999.00",
+            url: "https://www.walmart.com/ip/ipad-pro/12345",
+            thumbnail: "ipad.jpg"
+          }
+        ]
+      })
+    });
+
+    const results = await searchWalmart("ipad pro");
+
+    expect(results).toEqual([
+      {
+        retailer: "Walmart",
+        retailerId: "12345",
+        name: "Apple iPad Pro 11-inch 256GB",
+        price: 999,
+        url: "https://www.walmart.com/ip/ipad-pro/12345",
+        image: "ipad.jpg"
+      }
+    ]);
+  });
+
+  it("searchWalmart tolerates Walmart item stack response shapes", async () => {
+    fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        searchResult: {
+          itemStacks: [
+            {
+              items: [
+                {
+                  usItemId: "67890",
+                  name: "Apple iPad Pro 13-inch",
+                  price: {
+                    price: 1299
+                  },
+                  canonicalUrl: "https://www.walmart.com/ip/ipad-pro/67890",
+                  imageUrl: "ipad-13.jpg"
+                }
+              ]
+            }
+          ]
+        }
+      })
+    });
+
+    const results = await searchWalmart("ipad pro");
+
+    expect(results).toEqual([
+      expect.objectContaining({
+        retailerId: "67890",
+        name: "Apple iPad Pro 13-inch",
+        price: 1299
+      })
+    ]);
+  });
+
+  it("searchWalmart limits results to twenty items", async () => {
     fetch.mockResolvedValue({
       ok: true,
       json: async () => ({
         body: {
-          products: Array.from({ length: 7 }, (_, index) => ({
+          products: Array.from({ length: 25 }, (_, index) => ({
             title: `Item ${index}`,
             price: {
               currentPrice: `$${index + 10}.00`
@@ -71,8 +136,8 @@ describe("Walmart retailer adapter", () => {
 
     const results = await searchWalmart("monitor");
 
-    expect(results).toHaveLength(5);
-    expect(results[4].retailerId).toBe("id-4");
+    expect(results).toHaveLength(20);
+    expect(results[19].retailerId).toBe("id-19");
   });
 
   it("searchWalmart encodes multi-word queries once", async () => {
@@ -88,7 +153,7 @@ describe("Walmart retailer adapter", () => {
     await searchWalmart("ipad air");
 
     expect(fetch).toHaveBeenCalledWith(
-      "https://walmart-api4.p.rapidapi.com/walmart-serp.php?url=https%3A%2F%2Fwww.walmart.com%2Fsearch%3Fq%3Dipad%2Bair",
+      "https://walmart-api4.p.rapidapi.com/search?q=ipad+air&page=1",
       expect.any(Object)
     );
   });

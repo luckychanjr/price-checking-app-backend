@@ -55,6 +55,58 @@ describe("productService aggregation", () => {
     ]);
   });
 
+  it("filters cheap accessories when searching for the main product", async () => {
+    searchBestBuy.mockResolvedValue([
+      {
+        retailer: "BestBuy",
+        retailerId: "bb-care",
+        name: "AppleCare+ for 11-inch iPad Pro",
+        price: 79,
+        url: "https://bestbuy.com/applecare",
+        image: "applecare.jpg"
+      },
+      {
+        retailer: "BestBuy",
+        retailerId: "bb-ipad",
+        name: "Apple iPad Pro 11-inch 256GB Wi-Fi",
+        price: 999,
+        url: "https://bestbuy.com/ipad-pro",
+        image: "ipad-pro.jpg"
+      }
+    ]);
+    searchWalmart.mockResolvedValue([]);
+
+    const [result] = await searchProductsAcrossRetailers("Apple iPad Pro 11-inch 256GB");
+
+    expect(result.title).toBe("Apple iPad Pro 11-inch 256GB Wi-Fi");
+    expect(result.url).toBe("https://bestbuy.com/ipad-pro");
+    expect(result.cheapestPrice).toBe(999);
+    expect(result.cheapestRetailer).toBe("BestBuy");
+    expect(result.offers).toEqual([
+      expect.objectContaining({
+        retailerId: "bb-ipad"
+      })
+    ]);
+  });
+
+  it("returns up to twenty product groups by default", async () => {
+    searchBestBuy.mockResolvedValue(
+      Array.from({ length: 25 }, (_, index) => ({
+        retailer: "BestBuy",
+        retailerId: `bb-${index}`,
+        name: `Unique Test Product ${index + 1}GB`,
+        price: index + 1,
+        url: `https://bestbuy.com/product-${index}`,
+        image: `product-${index}.jpg`
+      }))
+    );
+    searchWalmart.mockResolvedValue([]);
+
+    const results = await searchProductsAcrossRetailers("test product");
+
+    expect(results).toHaveLength(20);
+  });
+
   it("getProductAcrossRetailers returns the best clustered match", async () => {
     searchBestBuy.mockResolvedValue([
       {
