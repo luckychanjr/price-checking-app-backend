@@ -93,6 +93,85 @@ describe("searchBestBuy", () => {
     ]);
   });
 
+  it("filters tablet stands from normal iPad searches", async () => {
+    fetch.mockResolvedValue({
+      json: async () => ({
+        products: [
+          {
+            sku: 456,
+            name: "Satechi R1 Aluminum Multi-Angle Foldable Tablet Stand Compatible with iPad Air",
+            salePrice: 39.99,
+            url: "https://example.com/stand",
+            image: "stand.jpg"
+          },
+          {
+            sku: 789,
+            name: "Apple 11-inch iPad Air M4 chip Wi-Fi 128GB",
+            salePrice: 559,
+            url: "https://example.com/ipad-air",
+            image: "ipad-air.jpg"
+          }
+        ]
+      })
+    });
+
+    const results = await searchBestBuy("ipad air");
+
+    expect(results).toEqual([
+      {
+        retailer: "BestBuy",
+        retailerId: 789,
+        name: "Apple 11-inch iPad Air M4 chip Wi-Fi 128GB",
+        price: 559,
+        url: "https://example.com/ipad-air",
+        image: "ipad-air.jpg"
+      }
+    ]);
+  });
+
+  it("filters screen glass and installation services from normal iPad Pro searches", async () => {
+    fetch.mockResolvedValue({
+      json: async () => ({
+        products: [
+          {
+            sku: 456,
+            name: "ZAGG Glass XTR3 Apple iPad Pro 11-inch Clear",
+            salePrice: 49.99,
+            url: "https://example.com/glass",
+            image: "glass.jpg"
+          },
+          {
+            sku: 457,
+            name: "Tablet Shield Installation",
+            salePrice: 14.99,
+            url: "https://example.com/install",
+            image: "install.jpg"
+          },
+          {
+            sku: 789,
+            name: "Apple 11-inch iPad Pro M4 Wi-Fi 256GB",
+            salePrice: 999,
+            url: "https://example.com/ipad-pro",
+            image: "ipad-pro.jpg"
+          }
+        ]
+      })
+    });
+
+    const results = await searchBestBuy("ipad pro");
+
+    expect(results).toEqual([
+      {
+        retailer: "BestBuy",
+        retailerId: 789,
+        name: "Apple 11-inch iPad Pro M4 Wi-Fi 256GB",
+        price: 999,
+        url: "https://example.com/ipad-pro",
+        image: "ipad-pro.jpg"
+      }
+    ]);
+  });
+
   it("keeps AppleCare results when the search is explicitly for AppleCare", async () => {
     fetch.mockResolvedValue({
       json: async () => ({

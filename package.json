@@ -1,6 +1,8 @@
 {
   "type": "module",
   "scripts": {
+    "export:categories": "node scripts/exportBestBuyCategories.js",
+    "index:meili": "node scripts/indexBestBuyMeili.js",
     "test": "jest"
   },
   "devDependencies": {

@@ -15,8 +15,8 @@ function getRequiredEnv(name) {
 function buildRapidApiHeaders(apiKey) {
   return {
     "Content-Type": "application/json",
-    "X-RapidAPI-Key": apiKey,
-    "X-RapidAPI-Host": WALMART_RAPIDAPI_HOST
+    "x-rapidapi-host": WALMART_RAPIDAPI_HOST,
+    "x-rapidapi-key": apiKey
   };
 }
 
@@ -157,12 +157,11 @@ function findProductArray(value) {
 
 export async function searchWalmart(query) {
   const apiKey = getRequiredEnv("WALMART_RAPIDAPI_KEY");
-  const walmartSearchUrl = new URL(`https://${WALMART_RAPIDAPI_HOST}/search`);
-  walmartSearchUrl.searchParams.set("q", query);
-  walmartSearchUrl.searchParams.set("page", "1");
+  const walmartSearchUrl =
+    `https://${WALMART_RAPIDAPI_HOST}/search?q=${encodeURIComponent(query)}&page=1`;
 
   const res = await fetchWithTimeout(
-    walmartSearchUrl.toString(),
+    walmartSearchUrl,
     {
       headers: buildRapidApiHeaders(apiKey)
     },

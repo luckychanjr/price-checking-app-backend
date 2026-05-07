@@ -34,8 +34,8 @@ describe("Walmart retailer adapter", () => {
       expect.objectContaining({
         headers: {
           "Content-Type": "application/json",
-          "X-RapidAPI-Key": "test-key",
-          "X-RapidAPI-Host": "walmart-api4.p.rapidapi.com"
+          "x-rapidapi-host": "walmart-api4.p.rapidapi.com",
+          "x-rapidapi-key": "test-key"
         },
         signal: expect.anything()
       })
@@ -153,7 +153,25 @@ describe("Walmart retailer adapter", () => {
     await searchWalmart("ipad air");
 
     expect(fetch).toHaveBeenCalledWith(
-      "https://walmart-api4.p.rapidapi.com/search?q=ipad+air&page=1",
+      "https://walmart-api4.p.rapidapi.com/search?q=ipad%20air&page=1",
+      expect.any(Object)
+    );
+  });
+
+  it("searchWalmart encodes multi-word queries like the working RapidAPI curl", async () => {
+    fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        body: {
+          products: []
+        }
+      })
+    });
+
+    await searchWalmart("ipad pro");
+
+    expect(fetch).toHaveBeenCalledWith(
+      "https://walmart-api4.p.rapidapi.com/search?q=ipad%20pro&page=1",
       expect.any(Object)
     );
   });
@@ -177,8 +195,8 @@ describe("Walmart retailer adapter", () => {
       expect.objectContaining({
         headers: {
           "Content-Type": "application/json",
-          "X-RapidAPI-Key": "test-key",
-          "X-RapidAPI-Host": "walmart-api4.p.rapidapi.com"
+          "x-rapidapi-host": "walmart-api4.p.rapidapi.com",
+          "x-rapidapi-key": "test-key"
         },
         signal: expect.anything()
       })
@@ -214,8 +232,8 @@ describe("Walmart retailer adapter", () => {
       expect.objectContaining({
         headers: {
           "Content-Type": "application/json",
-          "X-RapidAPI-Key": "test-key",
-          "X-RapidAPI-Host": "walmart-api4.p.rapidapi.com"
+          "x-rapidapi-host": "walmart-api4.p.rapidapi.com",
+          "x-rapidapi-key": "test-key"
         },
         signal: expect.anything()
       })

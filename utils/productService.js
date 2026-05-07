@@ -1,12 +1,9 @@
 import { searchBestBuy, getBestBuyById } from "../retailers/bestbuy.js";
 import { getWalmartByUrl, searchWalmart } from "../retailers/walmart.js";
 import { parseRetailerUrl } from "./parseUrl.js";
-import {
-  clusterProductGroups,
-  scoreProductSimilarity
-} from "./productCluster.js";
+import { scoreProductSimilarity } from "./productCluster.js";
 
-const DEFAULT_SEARCH_LIMIT = 20;
+const DEFAULT_SEARCH_LIMIT = 10;
 const ACCESSORY_TERMS = [
   "applecare",
   "apple care",
@@ -14,11 +11,26 @@ const ACCESSORY_TERMS = [
   "warranty",
   "case",
   "cover",
+  "folio",
+  "sleeve",
+  "glass",
+  "shield",
+  "installation",
   "screen protector",
+  "protector",
   "keyboard",
+  "pencil",
+  "stylus",
   "charger",
   "adapter",
-  "cable"
+  "cable",
+  "stand",
+  "holder",
+  "mount",
+  "dock",
+  "compatible with",
+  "for ipad",
+  "for apple ipad"
 ];
 
 const isUrl = (str) => {
@@ -111,46 +123,21 @@ function getProductRelevance(product, query) {
   return similarity - accessoryPenalty;
 }
 
-function getClusterRelevance(cluster, query) {
-  return Math.max(
-    ...cluster.map(product => getProductRelevance(product, query))
-  );
-}
-
-function pickRepresentativeOffer(cluster, query) {
-  return [...cluster].sort((a, b) => {
-    const relevanceDelta = getProductRelevance(b, query) - getProductRelevance(a, query);
-
-    if (relevanceDelta !== 0) {
-      return relevanceDelta;
-    }
-
-    return (a.price ?? Number.POSITIVE_INFINITY) - (b.price ?? Number.POSITIVE_INFINITY);
-  })[0];
-}
-
-function summarizeCluster(cluster, sourceInput, query) {
-  const sortedOffers = cluster
-    .filter(product => typeof product.price === "number")
-    .sort((a, b) => a.price - b.price);
-
-  if (sortedOffers.length === 0) {
+function summarizeProduct(product, sourceInput) {
+  if (typeof product?.price !== "number") {
     return null;
   }
 
-  const bestOffer = sortedOffers[0];
-  const representativeOffer = pickRepresentativeOffer(sortedOffers, query) || bestOffer;
-
   return {
-    title: representativeOffer.name,
-    name: representativeOffer.name,
-    image: representativeOffer.image || bestOffer.image || null,
-    url: representativeOffer.url || bestOffer.url || null,
+    title: product.name,
+    name: product.name,
+    image: product.image || null,
+    url: product.url || null,
     sourceInput,
-    cheapestPrice: bestOffer.price,
-    lowestPrice: bestOffer.price,
-    cheapestRetailer: bestOffer.retailer,
-    offers: sortedOffers
+    cheapestPrice: product.price,
+    lowestPrice: product.price,
+    cheapestRetailer: product.retailer,
+    offers: [product]
   };
 }
 
@@ -181,15 +168,9 @@ export async function searchProductsAcrossRetailers(input, options = {}) {
     throw new Error("No results from any retailer");
   }
 
-  const clusters = clusterProductGroups(allResults, rankingQuery)
-    .sort((a, b) => getClusterRelevance(b, rankingQuery) - getClusterRelevance(a, rankingQuery));
-
-  if (!clusters || clusters.length === 0) {
-    throw new Error("No product offers found after clustering");
-  }
-
-  const summarizedResults = clusters
-    .map(cluster => summarizeCluster(cluster, input, rankingQuery))
+  const summarizedResults = allResults
+    .sort((a, b) => getProductRelevance(b, rankingQuery) - getProductRelevance(a, rankingQuery))
+    .map(product => summarizeProduct(product, input))
     .filter(Boolean)
     .slice(0, limit);
 

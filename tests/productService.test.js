@@ -21,7 +21,7 @@ describe("productService aggregation", () => {
     jest.clearAllMocks();
   });
 
-  it("includes Walmart offers in clustered cross-retailer results", async () => {
+  it("returns retailer search matches as separate product cards", async () => {
     searchBestBuy.mockResolvedValue([
       {
         retailer: "BestBuy",
@@ -46,13 +46,12 @@ describe("productService aggregation", () => {
 
     const results = await searchProductsAcrossRetailers("ipad air");
 
-    expect(results).toHaveLength(1);
-    expect(results[0].cheapestRetailer).toBe("Walmart");
-    expect(results[0].offers).toHaveLength(2);
-    expect(results[0].offers.map((offer) => offer.retailer)).toEqual([
-      "Walmart",
-      "BestBuy"
+    expect(results).toHaveLength(2);
+    expect(results.map((result) => result.cheapestRetailer)).toEqual([
+      "BestBuy",
+      "Walmart"
     ]);
+    expect(results.every((result) => result.offers.length === 1)).toBe(true);
   });
 
   it("filters cheap accessories when searching for the main product", async () => {
@@ -89,7 +88,74 @@ describe("productService aggregation", () => {
     ]);
   });
 
-  it("returns up to twenty product groups by default", async () => {
+  it("filters tablet stands and compatibility accessories from iPad searches", async () => {
+    searchBestBuy.mockResolvedValue([
+      {
+        retailer: "BestBuy",
+        retailerId: "bb-stand",
+        name: "Satechi R1 Foldable Tablet Stand Compatible with iPad Air",
+        price: 39.99,
+        url: "https://bestbuy.com/tablet-stand",
+        image: "stand.jpg"
+      },
+      {
+        retailer: "BestBuy",
+        retailerId: "bb-ipad-air",
+        name: "Apple 11-inch iPad Air M4 chip Wi-Fi 128GB Blue",
+        price: 559,
+        url: "https://bestbuy.com/ipad-air",
+        image: "ipad-air.jpg"
+      }
+    ]);
+    searchWalmart.mockResolvedValue([]);
+
+    const results = await searchProductsAcrossRetailers("ipad air");
+
+    expect(results).toHaveLength(1);
+    expect(results[0]).toEqual(
+      expect.objectContaining({
+        title: "Apple 11-inch iPad Air M4 chip Wi-Fi 128GB Blue",
+        cheapestRetailer: "BestBuy"
+      })
+    );
+  });
+
+  it("filters screen glass and installation services from iPad Pro searches", async () => {
+    searchBestBuy.mockResolvedValue([
+      {
+        retailer: "BestBuy",
+        retailerId: "bb-glass",
+        name: "ZAGG Glass XTR3 Apple iPad Pro 11-inch Clear",
+        price: 49.99,
+        url: "https://bestbuy.com/ipad-pro-glass",
+        image: "glass.jpg"
+      },
+      {
+        retailer: "BestBuy",
+        retailerId: "bb-install",
+        name: "Tablet Shield Installation",
+        price: 14.99,
+        url: "https://bestbuy.com/tablet-shield-installation",
+        image: "installation.jpg"
+      },
+      {
+        retailer: "BestBuy",
+        retailerId: "bb-ipad-pro",
+        name: "Apple 11-inch iPad Pro M4 Wi-Fi 256GB",
+        price: 999,
+        url: "https://bestbuy.com/ipad-pro",
+        image: "ipad-pro.jpg"
+      }
+    ]);
+    searchWalmart.mockResolvedValue([]);
+
+    const results = await searchProductsAcrossRetailers("ipad pro");
+
+    expect(results).toHaveLength(1);
+    expect(results[0].title).toBe("Apple 11-inch iPad Pro M4 Wi-Fi 256GB");
+  });
+
+  it("returns up to ten product groups by default", async () => {
     searchBestBuy.mockResolvedValue(
       Array.from({ length: 25 }, (_, index) => ({
         retailer: "BestBuy",
@@ -104,10 +170,10 @@ describe("productService aggregation", () => {
 
     const results = await searchProductsAcrossRetailers("test product");
 
-    expect(results).toHaveLength(20);
+    expect(results).toHaveLength(10);
   });
 
-  it("getProductAcrossRetailers returns the best clustered match", async () => {
+  it("getProductAcrossRetailers returns the best individual match", async () => {
     searchBestBuy.mockResolvedValue([
       {
         retailer: "BestBuy",
@@ -134,7 +200,7 @@ describe("productService aggregation", () => {
 
     expect(result.cheapestRetailer).toBe("Walmart");
     expect(result.lowestPrice).toBe(649);
-    expect(result.offers).toHaveLength(2);
+    expect(result.offers).toHaveLength(1);
   });
 
   it("throws when neither retailer returns results", async () => {
