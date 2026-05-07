@@ -118,6 +118,50 @@ describe("searchBestBuyResults", () => {
     expect(results[0].name).toBe("Apple iPad Pro fallback result");
   });
 
+  it("includes Best Buy shared identifier fields when available", async () => {
+    fetch.mockImplementation(async (url) => {
+      if (url.includes("categories(")) {
+        return {
+          json: async () => ({ categories: [] })
+        };
+      }
+
+      return {
+        json: async () => ({
+          products: [
+            {
+              sku: 789,
+              name: "Sony WH-1000XM6 Wireless Headphones",
+              salePrice: 449.99,
+              url: "https://example.com/sony-headphones",
+              image: "sony.jpg",
+              upc: "027242927209",
+              modelNumber: "WH1000XM6/B",
+              manufacturer: "Sony"
+            }
+          ]
+        })
+      };
+    });
+
+    const results = await searchBestBuyResults("sony headphones");
+
+    expect(results[0]).toEqual(
+      expect.objectContaining({
+        upc: "027242927209",
+        modelNumber: "WH1000XM6/B",
+        manufacturer: "Sony"
+      })
+    );
+    expect(results[0].offers[0]).toEqual(
+      expect.objectContaining({
+        upc: "027242927209",
+        modelNumber: "WH1000XM6/B",
+        manufacturer: "Sony"
+      })
+    );
+  });
+
   it("keeps category and raw results without taxonomy grouping", async () => {
     fetch
       .mockResolvedValueOnce({

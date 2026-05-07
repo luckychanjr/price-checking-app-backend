@@ -14,6 +14,9 @@ const BESTBUY_FIELDS = [
   "salePrice",
   "url",
   "image",
+  "upc",
+  "modelNumber",
+  "manufacturer",
   "department",
   "class",
   "subclass",
@@ -159,14 +162,24 @@ function hasValidPrice(product) {
   return typeof product?.salePrice === "number" && Number.isFinite(product.salePrice);
 }
 
+function getBestBuyIdentifierFields(product) {
+  return {
+    ...(product?.upc ? { upc: product.upc } : {}),
+    ...(product?.modelNumber ? { modelNumber: product.modelNumber } : {}),
+    ...(product?.manufacturer ? { manufacturer: product.manufacturer } : {})
+  };
+}
+
 function toSearchResult(product, sourceInput) {
+  const identifiers = getBestBuyIdentifierFields(product);
   const offer = {
     retailer: "BestBuy",
     retailerId: product.sku,
     name: product.name,
     price: product.salePrice,
     url: product.url || null,
-    image: product.image || null
+    image: product.image || null,
+    ...identifiers
   };
 
   return {
@@ -178,6 +191,7 @@ function toSearchResult(product, sourceInput) {
     cheapestPrice: product.salePrice,
     lowestPrice: product.salePrice,
     cheapestRetailer: "BestBuy",
+    ...identifiers,
     offers: [offer]
   };
 }
@@ -199,6 +213,9 @@ async function fetchBestBuyProducts(input, apiKey, categoryId = null) {
         sku: product?.sku,
         name: product?.name,
         salePrice: product?.salePrice,
+        upc: product?.upc,
+        modelNumber: product?.modelNumber,
+        manufacturer: product?.manufacturer,
         categoryPath: Array.isArray(product?.categoryPath)
           ? product.categoryPath.map(category => category?.name).filter(Boolean)
           : []
@@ -347,7 +364,10 @@ export async function searchBestBuyResults(input, options = {}) {
         returnedItems: items.slice(0, 10).map(item => ({
           name: item.name,
           lowestPrice: item.lowestPrice,
-          cheapestRetailer: item.cheapestRetailer
+          cheapestRetailer: item.cheapestRetailer,
+          upc: item.upc,
+          modelNumber: item.modelNumber,
+          manufacturer: item.manufacturer
         })),
         calls: debugCalls
       }

@@ -133,6 +133,118 @@ describe("searchItems handler", () => {
     ]);
   });
 
+  it("merges high-confidence cross-retailer matches into one offer group", async () => {
+    searchBestBuyResults.mockResolvedValue([
+      {
+        title: "Apple 11-inch iPad Air M3 Wi-Fi 128GB - Blue",
+        name: "Apple 11-inch iPad Air M3 Wi-Fi 128GB - Blue",
+        image: "bestbuy-ipad.jpg",
+        url: "https://example.com/bestbuy-ipad-air",
+        sourceInput: "ipad air",
+        cheapestPrice: 599,
+        lowestPrice: 599,
+        cheapestRetailer: "BestBuy",
+        modelNumber: "MC9X4LL/A",
+        manufacturer: "Apple",
+        offers: [
+          {
+            retailer: "BestBuy",
+            retailerId: 123,
+            name: "Apple 11-inch iPad Air M3 Wi-Fi 128GB - Blue",
+            price: 599,
+            url: "https://example.com/bestbuy-ipad-air",
+            image: "bestbuy-ipad.jpg",
+            modelNumber: "MC9X4LL/A",
+            manufacturer: "Apple"
+          }
+        ]
+      }
+    ]);
+    searchWalmart.mockResolvedValue([
+      {
+        retailer: "Walmart",
+        retailerId: "w-123",
+        name: "2025 Apple 11-inch iPad Air M3 Wi-Fi 128GB Blue",
+        price: 549,
+        url: "https://example.com/walmart-ipad-air",
+        image: "walmart-ipad.jpg"
+      }
+    ]);
+
+    const response = await handler({
+      body: JSON.stringify({ query: "ipad air" })
+    });
+    const body = JSON.parse(response.body);
+
+    expect(response.statusCode).toBe(200);
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0]).toEqual(
+      expect.objectContaining({
+        name: "Apple 11-inch iPad Air M3 Wi-Fi 128GB - Blue",
+        lowestPrice: 549,
+        cheapestPrice: 549,
+        cheapestRetailer: "Walmart"
+      })
+    );
+    expect(body.items[0].offers).toEqual([
+      expect.objectContaining({
+        retailer: "Walmart",
+        price: 549
+      }),
+      expect.objectContaining({
+        retailer: "BestBuy",
+        price: 599
+      })
+    ]);
+  });
+
+  it("does not merge cross-retailer results when important product tokens conflict", async () => {
+    searchBestBuyResults.mockResolvedValue([
+      {
+        title: "Apple 11-inch iPad Air M3 Wi-Fi 128GB - Blue",
+        name: "Apple 11-inch iPad Air M3 Wi-Fi 128GB - Blue",
+        image: "bestbuy-ipad.jpg",
+        url: "https://example.com/bestbuy-ipad-air",
+        sourceInput: "ipad air",
+        cheapestPrice: 599,
+        lowestPrice: 599,
+        cheapestRetailer: "BestBuy",
+        offers: [
+          {
+            retailer: "BestBuy",
+            retailerId: 123,
+            name: "Apple 11-inch iPad Air M3 Wi-Fi 128GB - Blue",
+            price: 599,
+            url: "https://example.com/bestbuy-ipad-air",
+            image: "bestbuy-ipad.jpg"
+          }
+        ]
+      }
+    ]);
+    searchWalmart.mockResolvedValue([
+      {
+        retailer: "Walmart",
+        retailerId: "w-256",
+        name: "2025 Apple 11-inch iPad Air M3 Wi-Fi 256GB Blue",
+        price: 649,
+        url: "https://example.com/walmart-ipad-air-256",
+        image: "walmart-ipad.jpg"
+      }
+    ]);
+
+    const response = await handler({
+      body: JSON.stringify({ query: "ipad air" })
+    });
+    const body = JSON.parse(response.body);
+
+    expect(response.statusCode).toBe(200);
+    expect(body.items).toHaveLength(2);
+    expect(body.items.map(item => item.name)).toEqual([
+      "Apple 11-inch iPad Air M3 Wi-Fi 128GB - Blue",
+      "2025 Apple 11-inch iPad Air M3 Wi-Fi 256GB Blue"
+    ]);
+  });
+
   it("returns Walmart results when Best Buy returns no results", async () => {
     searchBestBuyResults.mockRejectedValue(
       new Error("No results from Best Buy")
@@ -262,5 +374,60 @@ describe("searchItems handler", () => {
     expect(body.debug.bestbuy.provider).toBe("bestbuy");
     expect(body.debug.walmart.provider).toBe("walmart");
     expect(body.debug.returnedItemCount).toBe(2);
+  });
+
+  it("includes cross-retailer match details in combined debug output", async () => {
+    searchBestBuyResults.mockResolvedValue({
+      items: [
+        {
+          name: "Apple 11-inch iPad Air M3 Wi-Fi 128GB - Blue",
+          lowestPrice: 599,
+          cheapestPrice: 599,
+          cheapestRetailer: "BestBuy",
+          offers: [
+            {
+              retailer: "BestBuy",
+              name: "Apple 11-inch iPad Air M3 Wi-Fi 128GB - Blue",
+              price: 599
+            }
+          ]
+        }
+      ],
+      debug: {
+        provider: "bestbuy",
+        returnedItemCount: 1
+      }
+    });
+    searchWalmart.mockResolvedValue({
+      items: [
+        {
+          retailer: "Walmart",
+          retailerId: "w-123",
+          name: "2025 Apple 11-inch iPad Air M3 Wi-Fi 128GB Blue",
+          price: 549,
+          url: null,
+          image: null
+        }
+      ],
+      debug: {
+        productArrayCount: 1,
+        validItemCount: 1
+      }
+    });
+
+    const response = await handler({
+      body: JSON.stringify({ query: "ipad air", debug: true })
+    });
+    const body = JSON.parse(response.body);
+
+    expect(response.statusCode).toBe(200);
+    expect(body.items).toHaveLength(1);
+    expect(body.debug.crossRetailerMatchCount).toBe(1);
+    expect(body.debug.crossRetailerMatches[0]).toEqual(
+      expect.objectContaining({
+        bestBuyName: "Apple 11-inch iPad Air M3 Wi-Fi 128GB - Blue",
+        walmartName: "2025 Apple 11-inch iPad Air M3 Wi-Fi 128GB Blue"
+      })
+    );
   });
 });

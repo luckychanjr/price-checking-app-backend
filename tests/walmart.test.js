@@ -164,6 +164,339 @@ describe("Walmart retailer adapter", () => {
     ]);
   });
 
+  it("exposes Walmart identifier fields in debug samples and normalized products", async () => {
+    fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        searchResult: {
+          itemStacks: [
+            {
+              items: [
+                {
+                  itemId: "item-111",
+                  usItemId: "111",
+                  upc: "887276778801",
+                  gtin: "00887276778801",
+                  ean: "0887276778801",
+                  modelNumber: "SM-X210NZAAXAR",
+                  brand: "Samsung",
+                  manufacturer: "Samsung Electronics",
+                  name: "Samsung Galaxy Tab A9+ 11-inch Tablet",
+                  price: {
+                    price: "$219.00"
+                  },
+                  canonicalUrl: "https://www.walmart.com/ip/galaxy-tab/111",
+                  imageUrl: "tab.jpg"
+                }
+              ]
+            }
+          ]
+        }
+      })
+    });
+
+    const response = await searchWalmart("samsung galaxy tab", { debug: true });
+
+    expect(response.items[0]).toEqual(
+      expect.objectContaining({
+        upc: "887276778801",
+        gtin: "00887276778801",
+        ean: "0887276778801",
+        modelNumber: "SM-X210NZAAXAR",
+        brand: "Samsung",
+        manufacturer: "Samsung Electronics",
+        itemId: "item-111",
+        usItemId: "111"
+      })
+    );
+    expect(response.debug.sampleRawProducts[0]).toEqual(
+      expect.objectContaining({
+        upc: "887276778801",
+        gtin: "00887276778801",
+        ean: "0887276778801",
+        modelNumber: "SM-X210NZAAXAR",
+        brand: "Samsung",
+        manufacturer: "Samsung Electronics",
+        itemId: "item-111",
+        usItemId: "111"
+      })
+    );
+  });
+
+  it("deep-scans raw Walmart debug payloads for nested identifier-like fields", async () => {
+    fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          searchResult: {
+            itemStacks: [
+              {
+                items: [
+                  {
+                    name: "Apple iPad Air",
+                    price: "$599.00",
+                    canonicalUrl: "https://www.walmart.com/ip/ipad-air/123",
+                    productIdentifiers: {
+                      gtin: "00195949728426"
+                    },
+                    specifications: [
+                      {
+                        name: "Model",
+                        value: "MC9X4LL/A"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          body: {}
+        })
+      });
+
+    const response = await searchWalmart("ipad air", { debug: true });
+
+    expect(response.debug.identifierFieldMatches).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "$.searchResult.itemStacks[0].items[0].productIdentifiers",
+          key: "productIdentifiers",
+          type: "object"
+        }),
+        expect.objectContaining({
+          path: "$.searchResult.itemStacks[0].items[0].productIdentifiers.gtin",
+          key: "gtin",
+          value: "00195949728426"
+        }),
+        expect.objectContaining({
+          path: "$.searchResult.itemStacks[0].items[0].specifications",
+          key: "specifications",
+          type: "array"
+        })
+      ])
+    );
+  });
+
+  it("does not treat specialBuy as a debug specification match", async () => {
+    fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          searchResult: [
+            [
+              {
+                name: "Apple iPad Air",
+                price: "$599.00",
+                canonicalUrl: "https://www.walmart.com/ip/ipad-air/123",
+                specialBuy: false
+              }
+            ]
+          ]
+        })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          body: {}
+        })
+      });
+
+    const response = await searchWalmart("ipad air", { debug: true });
+
+    expect(response.debug.identifierFieldMatches).toEqual([]);
+  });
+
+  it("deep-scans product details for identifier-like fields during debug searches", async () => {
+    fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          searchResult: [
+            [
+              {
+                name: "Apple iPad Air",
+                price: "$599.00",
+                canonicalUrl: "https://www.walmart.com/ip/ipad-air/123"
+              }
+            ]
+          ]
+        })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          body: {
+            product: {
+              identifiers: {
+                upc: "195949728426",
+                gtin: "00195949728426"
+              },
+              specifications: [
+                {
+                  name: "Model",
+                  value: "MC9X4LL/A"
+                }
+              ]
+            }
+          }
+        })
+      });
+
+    const response = await searchWalmart("ipad air", { debug: true });
+
+    expect(fetch).toHaveBeenLastCalledWith(
+      "https://walmart-api4.p.rapidapi.com/product-details.php?url=https%3A%2F%2Fwww.walmart.com%2Fip%2Fipad-air%2F123",
+      expect.any(Object)
+    );
+    expect(response.debug.productDetailScannedCount).toBe(1);
+    expect(response.debug.productDetailFieldMatches).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          url: "https://www.walmart.com/ip/ipad-air/123",
+          path: "$.body.product.identifiers",
+          key: "identifiers",
+          type: "object"
+        }),
+        expect.objectContaining({
+          url: "https://www.walmart.com/ip/ipad-air/123",
+          path: "$.body.product.identifiers.upc",
+          key: "upc",
+          value: "195949728426"
+        }),
+        expect.objectContaining({
+          url: "https://www.walmart.com/ip/ipad-air/123",
+          path: "$.body.product.identifiers.gtin",
+          key: "gtin",
+          value: "00195949728426"
+        }),
+        expect.objectContaining({
+          url: "https://www.walmart.com/ip/ipad-air/123",
+          path: "$.body.product.specifications",
+          key: "specifications",
+          type: "array"
+        })
+      ])
+    );
+  });
+
+  it("keeps product detail debug failures from failing Walmart search", async () => {
+    fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          searchResult: [
+            [
+              {
+                name: "Apple iPad Air",
+                price: "$599.00",
+                canonicalUrl: "https://www.walmart.com/ip/ipad-air/123"
+              }
+            ]
+          ]
+        })
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        text: async () => JSON.stringify({ message: "Rate limited" })
+      });
+
+    const response = await searchWalmart("ipad air", { debug: true });
+
+    expect(response.items).toHaveLength(1);
+    expect(response.debug.productDetailScans[0]).toEqual(
+      expect.objectContaining({
+        url: "https://www.walmart.com/ip/ipad-air/123",
+        error: "Walmart product details debug request failed with 429: Rate limited"
+      })
+    );
+  });
+
+  it("limits product detail debug scans to the first three unique URLs", async () => {
+    fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          body: {
+            products: Array.from({ length: 5 }, (_, index) => ({
+              title: `Item ${index}`,
+              price: "$10.00",
+              link: `https://www.walmart.com/ip/item-${index}`
+            }))
+          }
+        })
+      })
+      .mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          body: {}
+        })
+      });
+
+    const response = await searchWalmart("ipad air", { debug: true });
+
+    expect(response.debug.productDetailScanLimit).toBe(3);
+    expect(response.debug.productDetailScannedCount).toBe(3);
+    expect(fetch).toHaveBeenCalledTimes(4);
+  });
+
+  it("deep-scans item stack product details for nested identifier-like fields", async () => {
+    fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        searchResult: {
+          itemStacks: [
+            {
+              items: [
+                {
+                  name: "Apple iPad Air",
+                  price: "$599.00",
+                  canonicalUrl: "https://www.walmart.com/ip/ipad-air/123",
+                  productIdentifiers: {
+                    gtin: "00195949728426"
+                  },
+                  specifications: [
+                    {
+                      name: "Model",
+                      value: "MC9X4LL/A"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      })
+    });
+
+    const response = await searchWalmart("ipad air", { debug: true });
+
+    expect(response.debug.identifierFieldMatches).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "$.searchResult.itemStacks[0].items[0].productIdentifiers",
+          key: "productIdentifiers",
+          type: "object"
+        }),
+        expect.objectContaining({
+          path: "$.searchResult.itemStacks[0].items[0].productIdentifiers.gtin",
+          key: "gtin",
+          value: "00195949728426"
+        }),
+        expect.objectContaining({
+          path: "$.searchResult.itemStacks[0].items[0].specifications",
+          key: "specifications",
+          type: "array"
+        })
+      ])
+    );
+  });
+
   it("searchWalmart limits results to twenty items", async () => {
     fetch.mockResolvedValue({
       ok: true,

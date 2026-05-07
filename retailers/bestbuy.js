@@ -31,7 +31,10 @@ const BESTBUY_FIELDS = [
   "name",
   "salePrice",
   "url",
-  "image"
+  "image",
+  "upc",
+  "modelNumber",
+  "manufacturer"
 ];
 
 async function fetchWithTimeout(url, timeoutMs, label) {
@@ -84,7 +87,10 @@ function normalizeProduct(p) {
     name: p.name,
     price: p.salePrice,
     url: p.url,
-    image: p.image
+    image: p.image,
+    ...(p.upc ? { upc: p.upc } : {}),
+    ...(p.modelNumber ? { modelNumber: p.modelNumber } : {}),
+    ...(p.manufacturer ? { manufacturer: p.manufacturer } : {})
   };
 }
 
@@ -166,6 +172,9 @@ export async function getBestBuyById(sku) {
     name: p.name,
     price: p.salePrice,
     url: p.url,
-    image: p.image
+    image: p.image,
+    ...(p.upc ? { upc: p.upc } : {}),
+    ...(p.modelNumber ? { modelNumber: p.modelNumber } : {}),
+    ...(p.manufacturer ? { manufacturer: p.manufacturer } : {})
   };
 }
