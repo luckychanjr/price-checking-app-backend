@@ -1,6 +1,6 @@
 const WALMART_RAPIDAPI_HOST = "walmart-api4.p.rapidapi.com";
-const WALMART_SEARCH_TIMEOUT_MS = 4000;
-const WALMART_PRODUCT_TIMEOUT_MS = 4000;
+const WALMART_SEARCH_TIMEOUT_MS = 12000;
+const WALMART_PRODUCT_TIMEOUT_MS = 12000;
 
 function getRequiredEnv(name) {
   const value = process.env[name];
@@ -130,10 +130,6 @@ function normalizeSearchItem(item) {
 }
 
 function findProductArray(value) {
-  if (Array.isArray(value)) {
-    return value;
-  }
-
   if (!value || typeof value !== "object") {
     return [];
   }
@@ -148,14 +144,112 @@ function findProductArray(value) {
     value.data?.products,
     value.data?.results,
     value.data?.items,
+    value.searchResult,
+    value.searchResult?.products,
+    value.searchResult?.results,
+    value.searchResult?.items,
     value.searchResult?.itemStacks?.[0]?.items
   ];
 
-  const arrayCandidate = candidates.find(Array.isArray);
-  return arrayCandidate || [];
+  return candidates
+    .filter(Array.isArray)
+    .flatMap(candidate => collectProductCandidates(candidate));
 }
 
-export async function searchWalmart(query) {
+function getObjectKeys(value) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? Object.keys(value)
+    : [];
+}
+
+function isProductCandidate(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  return Boolean(
+    value.title ||
+    value.name ||
+    value.productName ||
+    value.price ||
+    value.salePrice ||
+    value.currentPrice ||
+    value.link ||
+    value.url ||
+    value.productUrl ||
+    value.canonicalUrl ||
+    value.id ||
+    value.productId ||
+    value.usItemId
+  );
+}
+
+function collectProductCandidates(value) {
+  if (Array.isArray(value)) {
+    return value.flatMap(item => collectProductCandidates(item));
+  }
+
+  if (isProductCandidate(value)) {
+    return [value];
+  }
+
+  return [];
+}
+
+function getValueType(value) {
+  if (Array.isArray(value)) {
+    return "array";
+  }
+
+  return value === null ? "null" : typeof value;
+}
+
+function summarizeValue(value) {
+  if (Array.isArray(value)) {
+    return {
+      type: "array",
+      length: value.length,
+      firstItemKeys: getObjectKeys(value[0])
+    };
+  }
+
+  if (value && typeof value === "object") {
+    return {
+      type: "object",
+      keys: Object.keys(value).slice(0, 25)
+    };
+  }
+
+  return {
+    type: getValueType(value),
+    value
+  };
+}
+
+function summarizeRawProduct(item) {
+  if (!item || typeof item !== "object") {
+    return item;
+  }
+
+  return {
+    keys: Object.keys(item).slice(0, 25),
+    id: item.id,
+    productId: item.productId,
+    usItemId: item.usItemId,
+    title: item.title,
+    name: item.name,
+    productName: item.productName,
+    price: item.price,
+    salePrice: item.salePrice,
+    currentPrice: item.currentPrice,
+    link: item.link,
+    url: item.url,
+    productUrl: item.productUrl,
+    canonicalUrl: item.canonicalUrl
+  };
+}
+
+export async function searchWalmart(query, options = {}) {
   const apiKey = getRequiredEnv("WALMART_RAPIDAPI_KEY");
   const walmartSearchUrl =
     `https://${WALMART_RAPIDAPI_HOST}/search?q=${encodeURIComponent(query)}&page=1`;
@@ -173,11 +267,34 @@ export async function searchWalmart(query) {
 
   const data = await res.json();
   const products = findProductArray(data);
-
-  return products
+  const normalizedProducts = products
     .slice(0, 20)
-    .map(normalizeSearchItem)
+    .map(normalizeSearchItem);
+  const items = normalizedProducts
     .filter((item) => item.name && typeof item.price === "number");
+
+  if (options.debug) {
+    return {
+      items,
+      debug: {
+        url: walmartSearchUrl,
+        aggregatedCount: data?.aggregatedCount,
+        topLevelKeys: getObjectKeys(data),
+        bodyKeys: getObjectKeys(data?.body),
+        dataKeys: getObjectKeys(data?.data),
+        searchResultKeys: getObjectKeys(data?.searchResult),
+        searchResultSummary: summarizeValue(data?.searchResult),
+        productArrayCount: products.length,
+        normalizedCount: normalizedProducts.length,
+        validItemCount: items.length,
+        droppedAfterNormalizeCount: normalizedProducts.length - items.length,
+        sampleRawProducts: products.slice(0, 5).map(summarizeRawProduct),
+        sampleNormalizedProducts: normalizedProducts.slice(0, 5)
+      }
+    };
+  }
+
+  return items;
 }
 
 export async function getWalmartByUrl(productUrl) {

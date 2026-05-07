@@ -117,6 +117,53 @@ describe("Walmart retailer adapter", () => {
     ]);
   });
 
+  it("searchWalmart flattens nested RapidAPI searchResult arrays", async () => {
+    fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        searchTerms: "samsung galaxy tab",
+        aggregatedCount: 1307,
+        searchResult: [
+          [
+            {
+              usItemId: "111",
+              name: "Samsung Galaxy Tab A9+ 11-inch Tablet",
+              price: {
+                price: "$219.00"
+              },
+              canonicalUrl: "https://www.walmart.com/ip/galaxy-tab/111",
+              imageUrl: "tab.jpg"
+            }
+          ],
+          [],
+          [
+            {
+              usItemId: "222",
+              name: "Samsung Galaxy Tab S10 Ultra",
+              currentPrice: "$999.00",
+              canonicalUrl: "https://www.walmart.com/ip/galaxy-tab-ultra/222"
+            }
+          ]
+        ]
+      })
+    });
+
+    const results = await searchWalmart("samsung galaxy tab");
+
+    expect(results).toEqual([
+      expect.objectContaining({
+        retailerId: "111",
+        name: "Samsung Galaxy Tab A9+ 11-inch Tablet",
+        price: 219
+      }),
+      expect.objectContaining({
+        retailerId: "222",
+        name: "Samsung Galaxy Tab S10 Ultra",
+        price: 999
+      })
+    ]);
+  });
+
   it("searchWalmart limits results to twenty items", async () => {
     fetch.mockResolvedValue({
       ok: true,

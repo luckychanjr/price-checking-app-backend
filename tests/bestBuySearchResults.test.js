@@ -113,7 +113,6 @@ describe("searchBestBuyResults", () => {
 
     const results = await searchBestBuyResults("ipad pro");
 
-    expect(fetch.mock.calls[0][0]).toContain("name=%22ipad*pro*%22");
     expect(fetch.mock.calls[0][0]).toContain("categoryPath.id=pcmcat1478822288810");
     expect(fetch.mock.calls.some(call => !call[0].includes("categoryPath.id="))).toBe(true);
     expect(results[0].name).toBe("Apple iPad Pro fallback result");

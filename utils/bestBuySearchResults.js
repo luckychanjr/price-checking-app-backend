@@ -4,7 +4,6 @@ const BESTBUY_SEARCH_TIMEOUT_MS = 4000;
 const BESTBUY_RESULT_LIMIT = 10;
 const BESTBUY_CANDIDATE_LIMIT = 50;
 const BESTBUY_CATEGORY_SEARCH_LIMIT = 3;
-const BESTBUY_NAME_CATEGORY_SEARCH_LIMIT = 2;
 const BESTBUY_MAX_CALLS_PER_SEARCH = 5;
 const BESTBUY_INTER_CALL_DELAY_MS = 500;
 const BESTBUY_RATE_LIMIT_DELAY_MS = 1200;
@@ -83,19 +82,8 @@ function buildBestBuySearchExpression(query, categoryId = null) {
   return `${searchTerms}${categoryTerm}`;
 }
 
-function buildBestBuyNameExpression(query, categoryId) {
-  const terms = getSearchTerms(query);
-  const nameValue = terms.length > 0
-    ? `"${terms.join("*")}*"`
-    : `"${String(query ?? "").trim()}*"`;
-
-  return `name=${encodeURIComponent(nameValue)}&categoryPath.id=${encodeURIComponent(categoryId)}`;
-}
-
-function buildBestBuySearchUrl(query, apiKey, categoryId = null, mode = "search") {
-  const searchExpression = mode === "name-category" && categoryId
-    ? buildBestBuyNameExpression(query, categoryId)
-    : buildBestBuySearchExpression(query, categoryId);
+function buildBestBuySearchUrl(query, apiKey, categoryId = null) {
+  const searchExpression = buildBestBuySearchExpression(query, categoryId);
 
   return `https://api.bestbuy.com/v1/products(${searchExpression})?apiKey=${apiKey}&format=json&pageSize=${BESTBUY_CANDIDATE_LIMIT}&show=${BESTBUY_FIELDS.join(",")}`;
 }
@@ -194,19 +182,27 @@ function toSearchResult(product, sourceInput) {
   };
 }
 
-async function fetchBestBuyProducts(input, apiKey, categoryId = null, mode = "search") {
-  const url = buildBestBuySearchUrl(input, apiKey, categoryId, mode);
+async function fetchBestBuyProducts(input, apiKey, categoryId = null) {
+  const url = buildBestBuySearchUrl(input, apiKey, categoryId);
   const { data, attempts } = await fetchBestBuyJsonWithRetry(url, "BestBuy search request");
+  const products = Array.isArray(data?.products) ? data.products : [];
 
   return {
-    products: Array.isArray(data?.products) ? data.products : [],
+    products,
     debug: {
       query: input,
       categoryId,
-      mode,
       url: url.replace(/apiKey=[^&]+/, "apiKey=REDACTED"),
       attempts,
-      productCount: Array.isArray(data?.products) ? data.products.length : 0
+      productCount: products.length,
+      sampleProducts: products.slice(0, 5).map(product => ({
+        sku: product?.sku,
+        name: product?.name,
+        salePrice: product?.salePrice,
+        categoryPath: Array.isArray(product?.categoryPath)
+          ? product.categoryPath.map(category => category?.name).filter(Boolean)
+          : []
+      }))
     }
   };
 }
@@ -281,38 +277,9 @@ export async function searchBestBuyResults(input, options = {}) {
   const queryVariants = getSearchQueryVariants(input);
   const products = [];
   let callCount = 0;
-  const nameCategoryIds = categoryIds.slice(0, BESTBUY_NAME_CATEGORY_SEARCH_LIMIT);
-
-  for (const categoryId of nameCategoryIds) {
-    if (callCount >= BESTBUY_MAX_CALLS_PER_SEARCH - 1) {
-      break;
-    }
-
-    try {
-      if (callCount > 0) {
-        await sleep(BESTBUY_INTER_CALL_DELAY_MS);
-      }
-
-      callCount += 1;
-      const result = await fetchBestBuyProducts(input, apiKey, categoryId, "name-category");
-      products.push(...result.products);
-      debugCalls.push({
-        type: "name-category",
-        ...result.debug
-      });
-    } catch (err) {
-      debugCalls.push({
-        type: "name-category",
-        query: input,
-        categoryId,
-        error: err.message
-      });
-      console.error("Best Buy name/category product search failed:", err);
-    }
-  }
 
   for (const categoryId of categoryIds) {
-    if (callCount >= BESTBUY_MAX_CALLS_PER_SEARCH - 1) {
+    if (callCount >= BESTBUY_MAX_CALLS_PER_SEARCH) {
       break;
     }
 
@@ -372,12 +339,16 @@ export async function searchBestBuyResults(input, options = {}) {
         input,
         categoryIds,
         queryVariants,
-        nameCategoryLimit: BESTBUY_NAME_CATEGORY_SEARCH_LIMIT,
         interCallDelayMs: BESTBUY_INTER_CALL_DELAY_MS,
         callCount,
         rawProductCount: products.length,
         dedupedProductCount: dedupedProducts.length,
         returnedItemCount: items.length,
+        returnedItems: items.slice(0, 10).map(item => ({
+          name: item.name,
+          lowestPrice: item.lowestPrice,
+          cheapestRetailer: item.cheapestRetailer
+        })),
         calls: debugCalls
       }
     };
