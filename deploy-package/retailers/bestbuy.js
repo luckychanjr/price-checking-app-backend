@@ -1,5 +1,6 @@
+import { normalizeBestBuyUrl } from "../utils/bestBuyUrl.js";
+
 const BESTBUY_SEARCH_TIMEOUT_MS = 4000;
-const BESTBUY_PRODUCT_TIMEOUT_MS = 4000;
 const BESTBUY_CANDIDATE_LIMIT = 50;
 const SERVICE_OR_ACCESSORY_TERMS = [
   "applecare",
@@ -32,6 +33,7 @@ const BESTBUY_FIELDS = [
   "salePrice",
   "url",
   "image",
+  "regularPrice",
   "upc",
   "modelNumber",
   "manufacturer"
@@ -49,16 +51,6 @@ async function fetchWithTimeout(url, timeoutMs, label) {
 
     throw err;
   }
-}
-
-export function extractBestBuyId(url) {
-  let match = url.match(/\/(\d+)\.p/);
-  if (match) return match[1];
-
-  match = url.match(/\/sku\/(\d+)/);
-  if (match) return match[1];
-
-  return null;
 }
 
 function isServiceOrAccessorySearch(query) {
@@ -81,12 +73,19 @@ function shouldRunTabletRetry(query) {
 }
 
 function normalizeProduct(p) {
+  const normalizedUrl = normalizeBestBuyUrl(p.url, p.sku, p.name);
+  const originalPrice =
+    typeof p.regularPrice === "number" && p.regularPrice > p.salePrice
+      ? p.regularPrice
+      : undefined;
+
   return {
     retailer: "BestBuy",
     retailerId: p.sku,
     name: p.name,
     price: p.salePrice,
-    url: p.url,
+    ...(originalPrice ? { originalPrice } : {}),
+    url: normalizedUrl,
     image: p.image,
     ...(p.upc ? { upc: p.upc } : {}),
     ...(p.modelNumber ? { modelNumber: p.modelNumber } : {}),
@@ -152,29 +151,4 @@ export async function searchBestBuy(query) {
 
   const tabletProducts = await fetchBestBuyProducts(`${query} tablet`);
   return dedupeBySku(filterBestBuyProducts(tabletProducts, query));
-}
-
-export async function getBestBuyById(sku) {
-  const API_KEY = process.env.BESTBUY_API_KEY;
-
-  const url = `https://api.bestbuy.com/v1/products(sku=${sku})?apiKey=${API_KEY}&format=json`;
-
-  const res = await fetchWithTimeout(url, BESTBUY_PRODUCT_TIMEOUT_MS, "BestBuy product request");
-  const data = await res.json();
-
-  const p = data.products?.[0];
-
-  if (!p) throw new Error("Best Buy product not found");
-
-  return {
-    retailer: "BestBuy",
-    retailerId: p.sku,
-    name: p.name,
-    price: p.salePrice,
-    url: p.url,
-    image: p.image,
-    ...(p.upc ? { upc: p.upc } : {}),
-    ...(p.modelNumber ? { modelNumber: p.modelNumber } : {}),
-    ...(p.manufacturer ? { manufacturer: p.manufacturer } : {})
-  };
 }

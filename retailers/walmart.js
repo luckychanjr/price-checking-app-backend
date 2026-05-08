@@ -106,6 +106,58 @@ function parseWalmartPrice(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function firstParsedPrice(...values) {
+  for (const value of values) {
+    const parsed = parseWalmartPrice(value);
+    if (parsed !== null) {
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
+function getNestedValue(source, path) {
+  return path.split(".").reduce((value, key) => value?.[key], source);
+}
+
+function getWalmartCurrentPrice(item) {
+  return firstParsedPrice(
+    item.price?.currentPrice,
+    item.price?.salePrice,
+    item.price?.price,
+    item.currentPrice,
+    item.salePrice,
+    item.price
+  );
+}
+
+function getWalmartOriginalPrice(item, currentPrice) {
+  const originalPrice = firstParsedPrice(
+    item.price?.wasPrice,
+    item.price?.listPrice,
+    item.price?.regularPrice,
+    item.price?.retailPrice,
+    item.price?.comparisonPrice,
+    item.wasPrice,
+    item.listPrice,
+    item.regularPrice,
+    item.retailPrice,
+    item.msrp,
+    getNestedValue(item, "priceInfo.wasPrice.price"),
+    getNestedValue(item, "priceInfo.listPrice.price"),
+    getNestedValue(item, "priceInfo.linePrice.price"),
+    getNestedValue(item, "priceInfo.comparisonPrice.price"),
+    getNestedValue(item, "priceInfo.currentPrice.price")
+  );
+
+  return typeof currentPrice === "number" &&
+    typeof originalPrice === "number" &&
+    originalPrice > currentPrice
+    ? originalPrice
+    : null;
+}
+
 function extractWalmartIdFromUrl(url) {
   if (typeof url !== "string" || !url) {
     return null;
@@ -133,18 +185,15 @@ function buildProductDetailsUrl(productUrl) {
 
 function normalizeSearchItem(item) {
   const productUrl = item.link || item.url || item.productUrl || item.canonicalUrl || null;
-  const price =
-    parseWalmartPrice(item.price?.currentPrice) ??
-    parseWalmartPrice(item.price?.price) ??
-    parseWalmartPrice(item.price) ??
-    parseWalmartPrice(item.salePrice) ??
-    parseWalmartPrice(item.currentPrice);
+  const price = getWalmartCurrentPrice(item);
+  const originalPrice = getWalmartOriginalPrice(item, price);
 
   return {
     retailer: "Walmart",
     retailerId: String(item.id ?? item.productId ?? item.usItemId ?? extractWalmartIdFromUrl(productUrl) ?? productUrl ?? ""),
     name: item.title || item.name || item.productName,
     price,
+    ...(originalPrice ? { originalPrice } : {}),
     url: productUrl,
     image: item.image || item.thumbnail || item.imageUrl || item.productImage || null,
     ...(item.upc ? { upc: item.upc } : {}),
@@ -430,6 +479,12 @@ function summarizeRawProduct(item) {
     name: item.name,
     productName: item.productName,
     price: item.price,
+    wasPrice: item.wasPrice,
+    listPrice: item.listPrice,
+    regularPrice: item.regularPrice,
+    retailPrice: item.retailPrice,
+    msrp: item.msrp,
+    priceInfo: item.priceInfo,
     salePrice: item.salePrice,
     currentPrice: item.currentPrice,
     link: item.link,
@@ -496,39 +551,4 @@ export async function searchWalmart(query, options = {}) {
   }
 
   return items;
-}
-
-export async function getWalmartByUrl(productUrl) {
-  const apiKey = getRequiredEnv("WALMART_RAPIDAPI_KEY");
-  const retailerId = extractWalmartIdFromUrl(productUrl) || productUrl;
-
-  const res = await fetchWithTimeout(
-    buildProductDetailsUrl(productUrl),
-    {
-      headers: buildRapidApiHeaders(apiKey)
-    },
-    WALMART_PRODUCT_TIMEOUT_MS,
-    "Walmart product details request"
-  );
-
-  await ensureOk(res, "Walmart product details request");
-
-  const data = await res.json();
-  const item = data.body;
-
-  if (!item?.title) throw new Error("Walmart product not found");
-
-  return {
-    retailer: "Walmart",
-    retailerId,
-    name: item.title,
-    price: parseWalmartPrice(item.price),
-    url: productUrl,
-    image: item.images?.[0] || null
-  };
-}
-
-export async function getWalmartById(id) {
-  const productUrl = `https://www.walmart.com/ip/${id}`;
-  return getWalmartByUrl(productUrl);
 }

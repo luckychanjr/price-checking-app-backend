@@ -31,6 +31,15 @@ describe("weighted product clustering", () => {
     expect(score).toBeLessThan(4.25);
   });
 
+  it("penalizes conflicting product condition", () => {
+    const score = scoreProductSimilarity(
+      "Apple Certified Refurbished iPad Air M3 11-inch 128GB Wi-Fi",
+      "Apple iPad Air M3 11-inch 128GB Wi-Fi"
+    );
+
+    expect(score).toBeLessThan(4.25);
+  });
+
   it("clusters matching retailer listings together and separates conflicting variants", () => {
     const products = [
       {

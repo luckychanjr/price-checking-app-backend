@@ -2,16 +2,11 @@ jest.mock("../utils/bestBuySearchResults.js", () => ({
   searchBestBuyResults: jest.fn()
 }));
 
-jest.mock("../utils/meiliSearchResults.js", () => ({
-  searchMeiliBestBuyResults: jest.fn()
-}));
-
 jest.mock("../retailers/walmart.js", () => ({
   searchWalmart: jest.fn()
 }));
 
 import { searchBestBuyResults } from "../utils/bestBuySearchResults.js";
-import { searchMeiliBestBuyResults } from "../utils/meiliSearchResults.js";
 import { searchWalmart } from "../retailers/walmart.js";
 import { handler } from "../functions/searchItems.js";
 
@@ -30,10 +25,10 @@ describe("searchItems handler", () => {
     process.env = originalEnv;
   });
 
-  it("returns mixed Best Buy and Walmart search results by default", async () => {
+  it("groups matching Best Buy and Walmart search results by default", async () => {
     searchBestBuyResults.mockResolvedValue([
       {
-        name: "Apple iPad Pro",
+        name: "Apple iPad Pro 11-inch Wi-Fi 256GB",
         lowestPrice: 999,
         cheapestRetailer: "BestBuy",
         offers: []
@@ -43,7 +38,7 @@ describe("searchItems handler", () => {
       {
         retailer: "Walmart",
         retailerId: "w-123",
-        name: "Apple iPad Pro - Walmart",
+        name: "Apple iPad Pro 11 inch Wi-Fi 256GB",
         price: 949,
         url: "https://example.com/walmart-ipad",
         image: "ipad.jpg"
@@ -58,28 +53,25 @@ describe("searchItems handler", () => {
     expect(JSON.parse(response.body)).toEqual({
       items: [
         {
-          name: "Apple iPad Pro",
-          lowestPrice: 999,
-          cheapestRetailer: "BestBuy",
-          offers: []
-        },
-        {
-          title: "Apple iPad Pro - Walmart",
-          name: "Apple iPad Pro - Walmart",
-          image: "ipad.jpg",
-          url: "https://example.com/walmart-ipad",
-          sourceInput: "ipad pro",
           cheapestPrice: 949,
+          name: "Apple iPad Pro 11-inch Wi-Fi 256GB",
           lowestPrice: 949,
           cheapestRetailer: "Walmart",
           offers: [
             {
               retailer: "Walmart",
               retailerId: "w-123",
-              name: "Apple iPad Pro - Walmart",
+              name: "Apple iPad Pro 11 inch Wi-Fi 256GB",
               price: 949,
               url: "https://example.com/walmart-ipad",
               image: "ipad.jpg"
+            },
+            {
+              retailer: "BestBuy",
+              name: "Apple iPad Pro 11-inch Wi-Fi 256GB",
+              price: 999,
+              url: null,
+              image: null
             }
           ]
         }
@@ -87,16 +79,16 @@ describe("searchItems handler", () => {
     });
   });
 
-  it("interleaves Best Buy and Walmart results so both retailers appear near the top", async () => {
+  it("clusters similar Best Buy and Walmart rows while keeping variants separate", async () => {
     searchBestBuyResults.mockResolvedValue([
       {
-        name: "Best Buy Result 1",
+        name: "Apple iPad Air M3 11-inch Wi-Fi 128GB Blue",
         lowestPrice: 999,
         cheapestRetailer: "BestBuy",
         offers: []
       },
       {
-        name: "Best Buy Result 2",
+        name: "Apple iPad Air M3 11-inch Wi-Fi 256GB Blue",
         lowestPrice: 1099,
         cheapestRetailer: "BestBuy",
         offers: []
@@ -106,7 +98,7 @@ describe("searchItems handler", () => {
       {
         retailer: "Walmart",
         retailerId: "w-1",
-        name: "Walmart Result 1",
+        name: "Apple iPad Air M3 11 inch Wi-Fi 128GB Blue",
         price: 949,
         url: null,
         image: null
@@ -114,7 +106,7 @@ describe("searchItems handler", () => {
       {
         retailer: "Walmart",
         retailerId: "w-2",
-        name: "Walmart Result 2",
+        name: "Apple iPad Air M3 11 inch Wi-Fi 256GB Blue",
         price: 1049,
         url: null,
         image: null
@@ -122,14 +114,18 @@ describe("searchItems handler", () => {
     ]);
 
     const response = await handler({
-      body: JSON.stringify({ query: "ipad pro" })
+      body: JSON.stringify({ query: "ipad air" })
     });
 
-    expect(JSON.parse(response.body).items.map(item => item.name)).toEqual([
-      "Best Buy Result 1",
-      "Walmart Result 1",
-      "Best Buy Result 2",
-      "Walmart Result 2"
+    const items = JSON.parse(response.body).items;
+
+    expect(items.map(item => item.name)).toEqual([
+      "Apple iPad Air M3 11-inch Wi-Fi 128GB Blue",
+      "Apple iPad Air M3 11-inch Wi-Fi 256GB Blue"
+    ]);
+    expect(items.map(item => item.offers.map(offer => offer.retailer))).toEqual([
+      ["Walmart", "BestBuy"],
+      ["Walmart", "BestBuy"]
     ]);
   });
 
@@ -245,6 +241,50 @@ describe("searchItems handler", () => {
     ]);
   });
 
+  it("does not group refurbished and new cross-retailer products together", async () => {
+    searchBestBuyResults.mockResolvedValue([
+      {
+        title: "Apple - Certified Refurbished 11-inch iPad Air M3 Wi-Fi 128GB - Blue",
+        name: "Apple - Certified Refurbished 11-inch iPad Air M3 Wi-Fi 128GB - Blue",
+        image: "bestbuy-ipad.jpg",
+        url: "https://example.com/bestbuy-refurbished-ipad-air",
+        sourceInput: "ipad air",
+        cheapestPrice: 499,
+        lowestPrice: 499,
+        cheapestRetailer: "BestBuy",
+        offers: [
+          {
+            retailer: "BestBuy",
+            retailerId: 123,
+            name: "Apple - Certified Refurbished 11-inch iPad Air M3 Wi-Fi 128GB - Blue",
+            price: 499,
+            url: "https://example.com/bestbuy-refurbished-ipad-air",
+            image: "bestbuy-ipad.jpg"
+          }
+        ]
+      }
+    ]);
+    searchWalmart.mockResolvedValue([
+      {
+        retailer: "Walmart",
+        retailerId: "w-new",
+        name: "2025 Apple 11-inch iPad Air M3 Wi-Fi 128GB Blue",
+        price: 549,
+        url: "https://example.com/walmart-new-ipad-air",
+        image: "walmart-ipad.jpg"
+      }
+    ]);
+
+    const response = await handler({
+      body: JSON.stringify({ query: "ipad air" })
+    });
+    const body = JSON.parse(response.body);
+
+    expect(response.statusCode).toBe(200);
+    expect(body.items).toHaveLength(2);
+    expect(body.items.every(item => item.offers.length === 1)).toBe(true);
+  });
+
   it("returns Walmart results when Best Buy returns no results", async () => {
     searchBestBuyResults.mockRejectedValue(
       new Error("No results from Best Buy")
@@ -267,28 +307,6 @@ describe("searchItems handler", () => {
     expect(response.statusCode).toBe(200);
     expect(JSON.parse(response.body).items).toHaveLength(1);
     expect(JSON.parse(response.body).items[0].cheapestRetailer).toBe("Walmart");
-  });
-
-  it("uses Meilisearch when SEARCH_PROVIDER is set to meilisearch", async () => {
-    process.env.SEARCH_PROVIDER = "meilisearch";
-    searchMeiliBestBuyResults.mockResolvedValue([
-      {
-        name: "Mortal Kombat 1 Standard Edition",
-        lowestPrice: 19.99,
-        cheapestRetailer: "BestBuy",
-        offers: []
-      }
-    ]);
-
-    const response = await handler({
-      body: JSON.stringify({ query: "mortal kombat 1" })
-    });
-
-    expect(searchBestBuyResults).not.toHaveBeenCalled();
-    expect(searchWalmart).not.toHaveBeenCalled();
-    expect(searchMeiliBestBuyResults).toHaveBeenCalledWith("mortal kombat 1", { debug: false });
-    expect(response.statusCode).toBe(200);
-    expect(JSON.parse(response.body).items[0].name).toBe("Mortal Kombat 1 Standard Edition");
   });
 
   it("passes through temporary Best Buy debug output when requested", async () => {
@@ -373,6 +391,7 @@ describe("searchItems handler", () => {
     expect(body.debug.provider).toBe("combined");
     expect(body.debug.bestbuy.provider).toBe("bestbuy");
     expect(body.debug.walmart.provider).toBe("walmart");
+    expect(body.debug.clusterCount).toBe(2);
     expect(body.debug.returnedItemCount).toBe(2);
   });
 
@@ -425,8 +444,12 @@ describe("searchItems handler", () => {
     expect(body.debug.crossRetailerMatchCount).toBe(1);
     expect(body.debug.crossRetailerMatches[0]).toEqual(
       expect.objectContaining({
-        bestBuyName: "Apple 11-inch iPad Air M3 Wi-Fi 128GB - Blue",
-        walmartName: "2025 Apple 11-inch iPad Air M3 Wi-Fi 128GB Blue"
+        names: [
+          "Apple 11-inch iPad Air M3 Wi-Fi 128GB - Blue",
+          "2025 Apple 11-inch iPad Air M3 Wi-Fi 128GB Blue"
+        ],
+        retailers: ["BestBuy", "Walmart"],
+        offerCount: 2
       })
     );
   });

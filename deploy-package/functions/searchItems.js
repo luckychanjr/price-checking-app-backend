@@ -1,10 +1,8 @@
 import { searchBestBuyResults } from "../utils/bestBuySearchResults.js";
-import { searchMeiliBestBuyResults } from "../utils/meiliSearchResults.js";
-import { scoreProductSimilarity } from "../utils/productCluster.js";
+import { clusterProductGroups } from "../utils/productCluster.js";
 import { searchWalmart } from "../retailers/walmart.js";
 
 const DEFAULT_RETAILER_LIMIT = 10;
-const CROSS_RETAILER_MERGE_THRESHOLD = 6;
 const IDENTIFIER_FIELDS = [
   "upc",
   "gtin",
@@ -31,6 +29,7 @@ function toSearchResult(product, sourceInput) {
     retailerId: product.retailerId,
     name: product.name,
     price: product.price,
+    ...(product.originalPrice ? { originalPrice: product.originalPrice } : {}),
     url: product.url || null,
     image: product.image || null,
     ...identifiers
@@ -44,6 +43,7 @@ function toSearchResult(product, sourceInput) {
     sourceInput,
     cheapestPrice: product.price,
     lowestPrice: product.price,
+    ...(product.originalPrice ? { originalPrice: product.originalPrice } : {}),
     cheapestRetailer: product.retailer,
     ...identifiers,
     offers: [offer]
@@ -58,44 +58,6 @@ function getDebugFromSearchResponse(response) {
   return Array.isArray(response) ? null : response?.debug || null;
 }
 
-function normalizeIdentifier(value) {
-  return String(value ?? "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
-}
-
-function getSharedIdentifierMatch(a, b) {
-  const aIdentifiers = [
-    a?.upc,
-    a?.gtin,
-    a?.ean,
-    ...(Array.isArray(a?.offers) ? a.offers.flatMap(offer => [offer?.upc, offer?.gtin, offer?.ean]) : [])
-  ].map(normalizeIdentifier).filter(Boolean);
-  const bIdentifiers = [
-    b?.upc,
-    b?.gtin,
-    b?.ean,
-    ...(Array.isArray(b?.offers) ? b.offers.flatMap(offer => [offer?.upc, offer?.gtin, offer?.ean]) : [])
-  ].map(normalizeIdentifier).filter(Boolean);
-  const bSet = new Set(bIdentifiers);
-
-  return aIdentifiers.find(identifier => bSet.has(identifier)) || null;
-}
-
-function getModelNumberHint(a, b) {
-  const values = [
-    a?.modelNumber,
-    ...(Array.isArray(a?.offers) ? a.offers.map(offer => offer?.modelNumber) : [])
-  ].map(normalizeIdentifier).filter(Boolean);
-  const bName = normalizeIdentifier(b?.name);
-
-  return values.find(value => value.length >= 4 && bName.includes(value)) || null;
-}
-
-function getOfferPrice(offer) {
-  return typeof offer?.price === "number" ? offer.price : Number.POSITIVE_INFINITY;
-}
-
 function getItemOffers(item) {
   if (Array.isArray(item?.offers) && item.offers.length > 0) {
     return item.offers;
@@ -107,6 +69,7 @@ function getItemOffers(item) {
       retailerId: item.retailerId,
       name: item.name,
       price: item.lowestPrice ?? item.cheapestPrice,
+      ...(item.originalPrice ? { originalPrice: item.originalPrice } : {}),
       url: item.url || null,
       image: item.image || null
     }];
@@ -115,8 +78,14 @@ function getItemOffers(item) {
   return [];
 }
 
-function summarizeMergedItem(primaryItem, mergedOffers) {
-  const offers = mergedOffers
+function getOfferRetailers(offers) {
+  return [...new Set(offers.map(offer => offer?.retailer).filter(Boolean))];
+}
+
+function summarizeClusterItem(cluster) {
+  const primaryItem = cluster[0];
+  const offers = cluster
+    .flatMap(item => getItemOffers(item))
     .filter(offer => typeof offer?.price === "number")
     .sort((a, b) => a.price - b.price);
   const cheapestOffer = offers[0];
@@ -129,78 +98,9 @@ function summarizeMergedItem(primaryItem, mergedOffers) {
     ...primaryItem,
     cheapestPrice: cheapestOffer.price,
     lowestPrice: cheapestOffer.price,
+    ...(cheapestOffer.originalPrice ? { originalPrice: cheapestOffer.originalPrice } : {}),
     cheapestRetailer: cheapestOffer.retailer,
     offers
-  };
-}
-
-function findBestCrossRetailerMatch(walmartItem, bestBuyItems) {
-  let bestMatch = null;
-  let bestScore = Number.NEGATIVE_INFINITY;
-  let bestReason = null;
-
-  for (const bestBuyItem of bestBuyItems) {
-    const sharedIdentifier = getSharedIdentifierMatch(bestBuyItem, walmartItem);
-    const modelNumberHint = getModelNumberHint(bestBuyItem, walmartItem);
-    const similarity = scoreProductSimilarity(bestBuyItem.name, walmartItem.name);
-    const score = similarity + (sharedIdentifier ? 10 : 0) + (modelNumberHint ? 2.5 : 0);
-
-    if (score > bestScore) {
-      bestScore = score;
-      bestMatch = bestBuyItem;
-      bestReason = sharedIdentifier
-        ? "shared_identifier"
-        : modelNumberHint
-          ? "model_number_in_name"
-          : "name_similarity";
-    }
-  }
-
-  if (!bestMatch || bestScore < CROSS_RETAILER_MERGE_THRESHOLD) {
-    return null;
-  }
-
-  return {
-    item: bestMatch,
-    score: bestScore,
-    reason: bestReason
-  };
-}
-
-function mergeCrossRetailerResults(bestBuyItems, walmartItems) {
-  const mergedByBestBuyItem = new Map();
-  const unmatchedWalmartItems = [];
-  const matches = [];
-
-  for (const walmartItem of walmartItems) {
-    const match = findBestCrossRetailerMatch(walmartItem, bestBuyItems);
-
-    if (!match) {
-      unmatchedWalmartItems.push(walmartItem);
-      continue;
-    }
-
-    const existingOffers = mergedByBestBuyItem.get(match.item) || getItemOffers(match.item);
-    mergedByBestBuyItem.set(match.item, [
-      ...existingOffers,
-      ...getItemOffers(walmartItem)
-    ]);
-    matches.push({
-      bestBuyName: match.item.name,
-      walmartName: walmartItem.name,
-      score: Number(match.score.toFixed(3)),
-      reason: match.reason
-    });
-  }
-
-  return {
-    bestBuyItems: bestBuyItems.map(item => (
-      mergedByBestBuyItem.has(item)
-        ? summarizeMergedItem(item, mergedByBestBuyItem.get(item))
-        : item
-    )),
-    walmartItems: unmatchedWalmartItems,
-    matches
   };
 }
 
@@ -217,6 +117,30 @@ function interleaveResults(...resultGroups) {
   }
 
   return items;
+}
+
+function clusterCombinedResults(bestBuyItems, walmartItems, input) {
+  const allItems = interleaveResults(bestBuyItems, walmartItems);
+  const clusters = clusterProductGroups(allItems, input);
+  const items = clusters.map(summarizeClusterItem);
+  const matches = clusters
+    .map(cluster => {
+      const offers = cluster.flatMap(item => getItemOffers(item));
+      const retailers = getOfferRetailers(offers);
+
+      return {
+        names: cluster.map(item => item.name),
+        retailers,
+        offerCount: offers.length
+      };
+    })
+    .filter(match => match.retailers.length > 1);
+
+  return {
+    items,
+    matches,
+    clusterCount: clusters.length
+  };
 }
 
 async function searchWalmartResults(input, options = {}) {
@@ -291,8 +215,8 @@ async function searchCombinedResults(input, options = {}) {
     console.error("Walmart search failed:", walmartResult.reason);
   }
 
-  const merged = mergeCrossRetailerResults(bestBuyItems, walmartItems);
-  const items = interleaveResults(merged.bestBuyItems, merged.walmartItems);
+  const clustered = clusterCombinedResults(bestBuyItems, walmartItems, input);
+  const items = clustered.items;
 
   if (items.length === 0 && debug.errors.length > 0) {
     throw new Error("No results from any retailer");
@@ -305,8 +229,9 @@ async function searchCombinedResults(input, options = {}) {
         ...debug,
         bestBuyItemCount: bestBuyItems.length,
         walmartItemCount: walmartItems.length,
-        crossRetailerMatchCount: merged.matches.length,
-        crossRetailerMatches: merged.matches,
+        clusterCount: clustered.clusterCount,
+        crossRetailerMatchCount: clustered.matches.length,
+        crossRetailerMatches: clustered.matches,
         returnedItemCount: items.length,
         returnedItems: items.map(item => ({
           name: item.name,
@@ -331,10 +256,6 @@ async function searchCombinedResults(input, options = {}) {
 async function searchProducts(input, options = {}) {
   const provider = getSearchProvider();
 
-  if (provider === "meilisearch") {
-    return searchMeiliBestBuyResults(input, options);
-  }
-
   if (provider === "bestbuy") {
     return searchBestBuyResults(input, options);
   }
@@ -353,7 +274,7 @@ async function searchProducts(input, options = {}) {
 export const handler = async (event) => {
   try {
     const body = JSON.parse(event.body || "{}");
-    const input = body.url || body.query;
+    const input = body.query;
     const debug = body.debug === true || body.debug === "true";
 
     if (!input) {
@@ -362,7 +283,7 @@ export const handler = async (event) => {
         headers: {
           "Access-Control-Allow-Origin": "*"
         },
-        body: JSON.stringify({ error: "Missing url or query" })
+        body: JSON.stringify({ error: "Missing query" })
       };
     }
 

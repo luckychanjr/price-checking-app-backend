@@ -124,4 +124,40 @@ describe("refreshStoredItem", () => {
       "https://www.walmart.com/ip/switch-oled"
     );
   });
+
+  it("updates stale Best Buy URLs when a refresh returns a normalized product URL", async () => {
+    getProductAcrossRetailers.mockResolvedValue({
+      title: "Dyson V11 Plus",
+      name: "Dyson V11 Plus",
+      cheapestPrice: 399,
+      lowestPrice: 399,
+      cheapestRetailer: "BestBuy",
+      url: "https://api.bestbuy.com/click/-/6577401/pdp",
+      offers: [
+        {
+          retailer: "BestBuy",
+          retailerId: "6577401",
+          name: "Dyson V11 Plus",
+          price: 399,
+          url: "https://api.bestbuy.com/click/-/6577401/pdp",
+          image: "dyson.jpg"
+        }
+      ]
+    });
+
+    const updated = await refreshStoredItem({
+      id: "dyson-1",
+      itemId: "dyson-1",
+      name: "Dyson V11 Plus",
+      title: "Dyson V11 Plus",
+      url: "https://www.bestbuy.com/site/-/6577401.p?cmp=RMX",
+      lowestPrice: 449,
+      cheapestPrice: 449,
+      cheapestRetailer: "BestBuy"
+    });
+
+    expect(updated.url).toBe("https://api.bestbuy.com/click/-/6577401/pdp");
+    expect(updated.offers[0].url).toBe("https://api.bestbuy.com/click/-/6577401/pdp");
+    expect(updated.lowestPrice).toBe(399);
+  });
 });

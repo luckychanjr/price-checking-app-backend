@@ -1,4 +1,5 @@
 import { getProductAcrossRetailers } from "./productService.js";
+import { normalizeBestBuyUrl } from "./bestBuyUrl.js";
 
 function isSupportedRetailerUrl(value) {
   return (
@@ -30,6 +31,19 @@ function getPreferredRefreshInput(currentItem) {
   );
 }
 
+function normalizeOfferUrls(offers) {
+  return offers.map(offer => {
+    if (offer?.retailer !== "BestBuy" && offer?.retailer !== "Best Buy") {
+      return offer;
+    }
+
+    return {
+      ...offer,
+      url: normalizeBestBuyUrl(offer.url, offer.retailerId, offer.name)
+    };
+  });
+}
+
 export async function refreshStoredItem(currentItem) {
   const refreshInput = getPreferredRefreshInput(currentItem);
 
@@ -53,9 +67,9 @@ export async function refreshStoredItem(currentItem) {
   const refreshedDisplayName = result.name || result.title || currentDisplayName || "Unknown Item";
   const refreshedOffers =
     Array.isArray(result.offers) && result.offers.length > 0
-      ? result.offers
+      ? normalizeOfferUrls(result.offers)
       : Array.isArray(currentItem?.offers)
-        ? currentItem.offers
+        ? normalizeOfferUrls(currentItem.offers)
         : [];
   const cheapestOffer = refreshedOffers.find(offer => typeof offer?.price === "number") || refreshedOffers[0] || null;
   const refreshedImage =
@@ -63,9 +77,17 @@ export async function refreshStoredItem(currentItem) {
     result.image ||
     cheapestOffer?.image ||
     null;
+  const normalizedCurrentUrl = normalizeBestBuyUrl(currentItem?.url, currentItem?.retailerId, currentDisplayName);
+  const currentUrlWasNormalized =
+    typeof currentItem?.url === "string" &&
+    normalizedCurrentUrl &&
+    normalizedCurrentUrl !== currentItem.url;
+  const normalizedResultUrl = normalizeBestBuyUrl(result.url, cheapestOffer?.retailerId, refreshedDisplayName);
+  const normalizedCheapestOfferUrl = normalizeBestBuyUrl(cheapestOffer?.url, cheapestOffer?.retailerId, cheapestOffer?.name);
   const refreshedUrl =
-    currentItem?.url ||
-    result.url ||
+    (currentUrlWasNormalized ? normalizedResultUrl || normalizedCheapestOfferUrl || normalizedCurrentUrl : normalizedCurrentUrl) ||
+    normalizedResultUrl ||
+    normalizedCheapestOfferUrl ||
     cheapestOffer?.url ||
     null;
   const refreshedPrice =
@@ -75,6 +97,10 @@ export async function refreshStoredItem(currentItem) {
     currentItem?.cheapestPrice ??
     currentItem?.lowestPrice ??
     0;
+  const refreshedOriginalPrice =
+    cheapestOffer?.originalPrice ??
+    result.originalPrice ??
+    currentItem?.originalPrice;
 
   return {
     ...currentItem,
@@ -87,6 +113,7 @@ export async function refreshStoredItem(currentItem) {
     url: refreshedUrl,
     cheapestPrice: refreshedPrice,
     lowestPrice: result.lowestPrice ?? result.cheapestPrice ?? refreshedPrice,
+    ...(refreshedOriginalPrice ? { originalPrice: refreshedOriginalPrice } : {}),
     cheapestRetailer:
       result.cheapestRetailer ||
       cheapestOffer?.retailer ||

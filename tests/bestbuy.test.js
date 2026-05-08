@@ -8,7 +8,6 @@ describe("searchBestBuy", () => {
   });
 
   it("returns normalized products", async () => {
-    // Mock API response
     fetch.mockResolvedValue({
       json: async () => ({
         products: [

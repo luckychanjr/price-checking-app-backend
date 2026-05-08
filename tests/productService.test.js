@@ -1,16 +1,13 @@
 jest.mock("../retailers/bestbuy.js", () => ({
-  searchBestBuy: jest.fn(),
-  getBestBuyById: jest.fn()
+  searchBestBuy: jest.fn()
 }));
 
 jest.mock("../retailers/walmart.js", () => ({
-  searchWalmart: jest.fn(),
-  getWalmartById: jest.fn(),
-  getWalmartByUrl: jest.fn()
+  searchWalmart: jest.fn()
 }));
 
 import { searchBestBuy } from "../retailers/bestbuy.js";
-import { getWalmartByUrl, searchWalmart } from "../retailers/walmart.js";
+import { searchWalmart } from "../retailers/walmart.js";
 import {
   getProductAcrossRetailers,
   searchProductsAcrossRetailers
@@ -212,72 +209,19 @@ describe("productService aggregation", () => {
     );
   });
 
-  it("uses the full Walmart URL to seed the cross-retailer search query", async () => {
-    getWalmartByUrl.mockResolvedValue({
-      retailer: "Walmart",
-      retailerId: "19659462511",
-      name: "2026 11-inch iPad Air M4 Wi-Fi 128GB Purple"
-    });
-    searchBestBuy.mockResolvedValue([
-      {
-        retailer: "BestBuy",
-        retailerId: "bb-3",
-        name: "2026 11-inch iPad Air M4 Wi-Fi 128GB Purple",
-        price: 599,
-        url: "https://bestbuy.com/ipad-air",
-        image: "bestbuy-ipad.jpg"
-      }
-    ]);
-    searchWalmart.mockResolvedValue([
-      {
-        retailer: "Walmart",
-        retailerId: "19659462511",
-        name: "2026 11-inch iPad Air M4 Wi-Fi 128GB Purple",
-        price: 599,
-        url: "https://www.walmart.com/ip/2026-11-inch-iPad-Air-M4-Wi-Fi-128GB-Purple/19659462511",
-        image: "walmart-ipad.jpg"
-      }
-    ]);
-
-    await searchProductsAcrossRetailers(
-      "https://www.walmart.com/ip/2026-11-inch-iPad-Air-M4-Wi-Fi-128GB-Purple/19659462511"
-    );
-
-    expect(getWalmartByUrl).toHaveBeenCalledWith(
-      "https://www.walmart.com/ip/2026-11-inch-iPad-Air-M4-Wi-Fi-128GB-Purple/19659462511"
-    );
-    expect(searchBestBuy).toHaveBeenCalledWith(
-      "2026 11-inch iPad Air M4 Wi-Fi 128GB Purple"
-    );
-    expect(searchWalmart).toHaveBeenCalledWith(
-      "2026 11-inch iPad Air M4 Wi-Fi 128GB Purple"
-    );
-  });
-
-  it("includes the resolved Walmart URL product even when retailer searches return no matches", async () => {
-    getWalmartByUrl.mockResolvedValue({
-      retailer: "Walmart",
-      retailerId: "19659462511",
-      name: "2026 11-inch iPad Air M4 Wi-Fi 128GB Purple",
-      price: 599,
-      url: "https://www.walmart.com/ip/2026-11-inch-iPad-Air-M4-Wi-Fi-128GB-Purple/19659462511",
-      image: "walmart-ipad.jpg"
-    });
+  it("treats URL-looking input as a plain search query", async () => {
     searchBestBuy.mockResolvedValue([]);
     searchWalmart.mockResolvedValue([]);
 
-    const results = await searchProductsAcrossRetailers(
+    await expect(searchProductsAcrossRetailers(
+      "https://www.walmart.com/ip/2026-11-inch-iPad-Air-M4-Wi-Fi-128GB-Purple/19659462511"
+    )).rejects.toThrow("No results from any retailer");
+
+    expect(searchBestBuy).toHaveBeenCalledWith(
       "https://www.walmart.com/ip/2026-11-inch-iPad-Air-M4-Wi-Fi-128GB-Purple/19659462511"
     );
-
-    expect(results).toHaveLength(1);
-    expect(results[0].cheapestRetailer).toBe("Walmart");
-    expect(results[0].offers).toEqual([
-      expect.objectContaining({
-        retailer: "Walmart",
-        retailerId: "19659462511",
-        price: 599
-      })
-    ]);
+    expect(searchWalmart).toHaveBeenCalledWith(
+      "https://www.walmart.com/ip/2026-11-inch-iPad-Air-M4-Wi-Fi-128GB-Purple/19659462511"
+    );
   });
 });

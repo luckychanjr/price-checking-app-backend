@@ -16,7 +16,7 @@ const generateId = () => crypto.randomUUID();
 export const handler = async (event) => {
   try {
     const body = JSON.parse(event.body || "{}");
-    const input = body.url || body.query;
+    const input = body.query;
     const selectedProduct = body.selectedProduct;
 
     if (!input && !selectedProduct) {
@@ -25,7 +25,7 @@ export const handler = async (event) => {
         headers: {
           "Access-Control-Allow-Origin": "*"
         },
-        body: JSON.stringify({ error: "Missing url or query" })
+        body: JSON.stringify({ error: "Missing query" })
       };
     }
 

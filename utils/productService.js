@@ -1,6 +1,5 @@
-import { searchBestBuy, getBestBuyById } from "../retailers/bestbuy.js";
-import { getWalmartByUrl, searchWalmart } from "../retailers/walmart.js";
-import { parseRetailerUrl } from "./parseUrl.js";
+import { searchBestBuy } from "../retailers/bestbuy.js";
+import { searchWalmart } from "../retailers/walmart.js";
 import { scoreProductSimilarity } from "./productCluster.js";
 
 const DEFAULT_SEARCH_LIMIT = 10;
@@ -33,58 +32,11 @@ const ACCESSORY_TERMS = [
   "for apple ipad"
 ];
 
-const isUrl = (str) => {
-  try {
-    new URL(str);
-    return true;
-  } catch {
-    return false;
-  }
-};
-
 async function resolveSearchContext(input) {
-  let query = input;
-  let seedProductName = null;
-  let seedProduct = null;
-
-  if (isUrl(input)) {
-    try {
-      const parsed = parseRetailerUrl(input);
-
-      if (parsed?.retailer === "BestBuy" && parsed?.id) {
-        try {
-          const product = await getBestBuyById(parsed.id);
-          if (product?.name) {
-            seedProduct = product;
-            seedProductName = product.name;
-            query = product.name;
-          }
-        } catch {
-          // Fall back to the original input when a retailer lookup is unavailable.
-        }
-      }
-
-      if (parsed?.retailer === "Walmart" && parsed?.id) {
-        try {
-          const product = await getWalmartByUrl(input);
-          if (product?.name) {
-            seedProduct = product;
-            seedProductName = product.name;
-            query = product.name;
-          }
-        } catch {
-          // Fall back to the original input when a retailer lookup is unavailable.
-        }
-      }
-    } catch {
-      // Unsupported URLs can continue as plain search input.
-    }
-  }
-
   return {
-    query,
-    seedProductName,
-    seedProduct
+    query: input,
+    seedProductName: null,
+    seedProduct: null
   };
 }
 
@@ -136,6 +88,7 @@ function summarizeProduct(product, sourceInput) {
     sourceInput,
     cheapestPrice: product.price,
     lowestPrice: product.price,
+    ...(product.originalPrice ? { originalPrice: product.originalPrice } : {}),
     cheapestRetailer: product.retailer,
     offers: [product]
   };
@@ -209,6 +162,7 @@ export function buildWishlistItemFromProduct(product) {
     sourceInput: product.sourceInput || product.url || product.name || product.title || "",
     cheapestPrice: Number(product.cheapestPrice ?? product.lowestPrice ?? bestOffer.price),
     lowestPrice: Number(product.lowestPrice ?? product.cheapestPrice ?? bestOffer.price),
+    ...(bestOffer.originalPrice ? { originalPrice: bestOffer.originalPrice } : {}),
     cheapestRetailer: product.cheapestRetailer || bestOffer.retailer,
     offers: sortedOffers
   };

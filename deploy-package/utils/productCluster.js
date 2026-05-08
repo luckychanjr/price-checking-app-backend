@@ -1,5 +1,3 @@
-import { normalize } from "./productNormalizer.js";
-
 const STOP_WORDS = new Set([
   "the",
   "and",
@@ -17,7 +15,15 @@ const STOP_WORDS = new Set([
   "uhd"
 ]);
 
+const CONDITION_TOKEN_GROUPS = [
+  ["refurbished", "renewed", "restored", "preowned", "pre", "owned", "used", "openbox", "open", "box"]
+];
+
 const CLUSTER_THRESHOLD = 4.25;
+
+function normalize(str) {
+  return String(str ?? "").toLowerCase().replace(/[^a-z0-9\s]/g, "");
+}
 
 function unique(values) {
   return [...new Set(values.filter(Boolean))];
@@ -92,6 +98,20 @@ function extractNumericTokens(tokens, excludedTokens, excludedNumberValues) {
   );
 }
 
+function extractConditionTokens(rawName) {
+  const normalizedName = normalize(rawName);
+  const tokens = new Set(tokenizeName(rawName));
+  const conditionTokens = [];
+
+  for (const group of CONDITION_TOKEN_GROUPS) {
+    if (group.some(token => tokens.has(token) || normalizedName.includes(token))) {
+      conditionTokens.push(group[0]);
+    }
+  }
+
+  return unique(conditionTokens);
+}
+
 function tokenizeName(rawName) {
   return normalize(rawName)
     .split(" ")
@@ -109,6 +129,7 @@ export function extractProductFeatures(productName) {
   const excludedNumericTokens = [...storageTokens, ...screenTokens];
   const modelTokens = extractModelTokens(tokens);
   const numericTokens = extractNumericTokens(tokens, excludedNumericTokens, screenValues);
+  const conditionTokens = extractConditionTokens(rawName);
   const informativeTokens = unique(
     tokens.filter(
       token =>
@@ -126,7 +147,8 @@ export function extractProductFeatures(productName) {
     storageTokens: new Set(storageTokens),
     screenTokens: new Set(screenTokens),
     modelTokens: new Set(modelTokens),
-    numericTokens: new Set(numericTokens)
+    numericTokens: new Set(numericTokens),
+    conditionTokens: new Set(conditionTokens)
   };
 }
 
@@ -202,6 +224,13 @@ export function scoreProductSimilarity(aName, bName) {
 
   if (hasScreenConflict) {
     score = Math.min(score, CLUSTER_THRESHOLD - 0.75);
+  }
+
+  const hasConditionConflict =
+    intersectionSize(a.conditionTokens, b.conditionTokens) === 0 &&
+    a.conditionTokens.size !== b.conditionTokens.size;
+  if (hasConditionConflict) {
+    score = Math.min(score, CLUSTER_THRESHOLD - 1);
   }
 
   return score;

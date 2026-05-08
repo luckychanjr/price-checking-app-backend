@@ -1,4 +1,5 @@
 import { resolveBestBuyCategoryIds } from "./bestBuyCategoryResolver.js";
+import { normalizeBestBuyUrl } from "./bestBuyUrl.js";
 
 const BESTBUY_SEARCH_TIMEOUT_MS = 4000;
 const BESTBUY_RESULT_LIMIT = 10;
@@ -14,6 +15,7 @@ const BESTBUY_FIELDS = [
   "salePrice",
   "url",
   "image",
+  "regularPrice",
   "upc",
   "modelNumber",
   "manufacturer",
@@ -172,12 +174,18 @@ function getBestBuyIdentifierFields(product) {
 
 function toSearchResult(product, sourceInput) {
   const identifiers = getBestBuyIdentifierFields(product);
+  const normalizedUrl = normalizeBestBuyUrl(product.url, product.sku, product.name);
+  const originalPrice =
+    typeof product.regularPrice === "number" && product.regularPrice > product.salePrice
+      ? product.regularPrice
+      : undefined;
   const offer = {
     retailer: "BestBuy",
     retailerId: product.sku,
     name: product.name,
     price: product.salePrice,
-    url: product.url || null,
+    ...(originalPrice ? { originalPrice } : {}),
+    url: normalizedUrl,
     image: product.image || null,
     ...identifiers
   };
@@ -186,10 +194,11 @@ function toSearchResult(product, sourceInput) {
     title: product.name,
     name: product.name,
     image: product.image || null,
-    url: product.url || null,
+    url: normalizedUrl,
     sourceInput,
     cheapestPrice: product.salePrice,
     lowestPrice: product.salePrice,
+    ...(originalPrice ? { originalPrice } : {}),
     cheapestRetailer: "BestBuy",
     ...identifiers,
     offers: [offer]
@@ -213,6 +222,7 @@ async function fetchBestBuyProducts(input, apiKey, categoryId = null) {
         sku: product?.sku,
         name: product?.name,
         salePrice: product?.salePrice,
+        regularPrice: product?.regularPrice,
         upc: product?.upc,
         modelNumber: product?.modelNumber,
         manufacturer: product?.manufacturer,

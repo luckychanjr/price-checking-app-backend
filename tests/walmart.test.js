@@ -1,4 +1,4 @@
-import { getWalmartById, getWalmartByUrl, searchWalmart } from "../retailers/walmart.js";
+import { searchWalmart } from "../retailers/walmart.js";
 
 global.fetch = jest.fn();
 
@@ -50,6 +50,34 @@ describe("Walmart retailer adapter", () => {
         image: "img.jpg"
       }
     ]);
+  });
+
+  it("uses current Walmart offer price and keeps regular price when both are present", async () => {
+    fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        products: [
+          {
+            productId: "smarttag-1",
+            name: "Samsung Galaxy SmartTag2",
+            price: {
+              currentPrice: "$21.73",
+              wasPrice: "$29.99"
+            },
+            url: "https://www.walmart.com/ip/smarttag/123"
+          }
+        ]
+      })
+    });
+
+    const results = await searchWalmart("samsung galaxy smarttag");
+
+    expect(results[0]).toEqual(
+      expect.objectContaining({
+        price: 21.73,
+        originalPrice: 29.99
+      })
+    );
   });
 
   it("searchWalmart accepts direct search endpoint product fields", async () => {
@@ -554,89 +582,6 @@ describe("Walmart retailer adapter", () => {
       "https://walmart-api4.p.rapidapi.com/search?q=ipad%20pro&page=1",
       expect.any(Object)
     );
-  });
-
-  it("getWalmartById returns the first normalized result", async () => {
-    fetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        body: {
-          title: "Walmart Tablet",
-          price: "$299.00",
-          images: ["tablet.jpg"]
-        }
-      })
-    });
-
-    const result = await getWalmartById("w-123");
-
-    expect(fetch).toHaveBeenCalledWith(
-      "https://walmart-api4.p.rapidapi.com/product-details.php?url=https%3A%2F%2Fwww.walmart.com%2Fip%2Fw-123",
-      expect.objectContaining({
-        headers: {
-          "Content-Type": "application/json",
-          "x-rapidapi-host": "walmart-api4.p.rapidapi.com",
-          "x-rapidapi-key": "test-key"
-        },
-        signal: expect.anything()
-      })
-    );
-    expect(result).toEqual({
-      retailer: "Walmart",
-      retailerId: "w-123",
-      name: "Walmart Tablet",
-      price: 299,
-      url: "https://www.walmart.com/ip/w-123",
-      image: "tablet.jpg"
-    });
-  });
-
-  it("getWalmartByUrl preserves the canonical Walmart URL when looking up product details", async () => {
-    fetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        body: {
-          title: "2026 11-inch iPad Air M4 Wi-Fi 128GB Purple",
-          price: "$599.00",
-          images: ["ipad-air.jpg"]
-        }
-      })
-    });
-
-    const productUrl =
-      "https://www.walmart.com/ip/2026-11-inch-iPad-Air-M4-Wi-Fi-128GB-Purple/19659462511";
-    const result = await getWalmartByUrl(productUrl);
-
-    expect(fetch).toHaveBeenCalledWith(
-      `https://walmart-api4.p.rapidapi.com/product-details.php?url=${encodeURIComponent(productUrl)}`,
-      expect.objectContaining({
-        headers: {
-          "Content-Type": "application/json",
-          "x-rapidapi-host": "walmart-api4.p.rapidapi.com",
-          "x-rapidapi-key": "test-key"
-        },
-        signal: expect.anything()
-      })
-    );
-    expect(result).toEqual({
-      retailer: "Walmart",
-      retailerId: "19659462511",
-      name: "2026 11-inch iPad Air M4 Wi-Fi 128GB Purple",
-      price: 599,
-      url: productUrl,
-      image: "ipad-air.jpg"
-    });
-  });
-
-  it("getWalmartById throws when Walmart returns no results", async () => {
-    fetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        body: {}
-      })
-    });
-
-    await expect(getWalmartById("missing")).rejects.toThrow("Walmart product not found");
   });
 
   it("throws a useful error when the Walmart API key is missing", async () => {
