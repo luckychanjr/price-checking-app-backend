@@ -72,12 +72,10 @@ describe("searchBestBuyResults", () => {
     );
     expect(results).toEqual([
       {
-        title: "Apple 11-inch iPad Pro M5 chip Wi-Fi 256GB",
         name: "Apple 11-inch iPad Pro M5 chip Wi-Fi 256GB",
         image: "ipad-pro.jpg",
         url: "https://example.com/ipad-pro",
         sourceInput: "ipad pro",
-        cheapestPrice: 999,
         lowestPrice: 999,
         cheapestRetailer: "BestBuy",
         offers: [

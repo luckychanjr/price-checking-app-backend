@@ -42,16 +42,16 @@ describe("refreshStoredItem", () => {
       offers: []
     });
 
-    expect(updated.id).toBe("abc");
     expect(updated.itemId).toBe("abc");
-    expect(updated.title).toBe("Apple iPad Air");
     expect(updated.name).toBe("Apple iPad Air");
     expect(updated.image).toBe("saved.jpg");
     expect(updated.url).toBe("https://bestbuy.com/ipad-air");
-    expect(updated.cheapestPrice).toBe(579);
     expect(updated.lowestPrice).toBe(579);
     expect(updated.cheapestRetailer).toBe("Walmart");
     expect(updated.offers).toHaveLength(1);
+    expect(updated).not.toHaveProperty("id");
+    expect(updated).not.toHaveProperty("title");
+    expect(updated).not.toHaveProperty("cheapestPrice");
   });
 
   it("falls back to refreshed naming when the stored item has no usable display name", async () => {
@@ -79,7 +79,6 @@ describe("refreshStoredItem", () => {
     });
 
     expect(updated.name).toBe("Samsung 55 Class QLED 4K TV");
-    expect(updated.title).toBe("Samsung 55 Class QLED 4K TV");
     expect(updated.image).toBe("tv.jpg");
     expect(updated.url).toBe("https://walmart.com/tv");
   });

@@ -43,7 +43,6 @@ export const handler = async (event) => {
       updatedItem[keySchema.sortKey] = existingItem[keySchema.sortKey];
     }
     updatedItem.itemId = existingItem.itemId || existingItem.id || updatedItem.itemId;
-    updatedItem.id = existingItem.id || existingItem.itemId || updatedItem.id;
 
     await dynamo.send(
       new PutCommand({

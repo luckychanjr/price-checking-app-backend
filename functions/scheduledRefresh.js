@@ -52,7 +52,7 @@ export const handler = async (event = {}) => {
         refreshedCount += 1;
       } catch (err) {
         failures.push({
-          itemId: item?.id || item?.itemId || "unknown",
+          itemId: item?.itemId || item?.id || "unknown",
           error: err.message || "Unknown refresh error"
         });
       }

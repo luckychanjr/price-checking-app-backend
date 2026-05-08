@@ -53,7 +53,6 @@ describe("searchItems handler", () => {
     expect(JSON.parse(response.body)).toEqual({
       items: [
         {
-          cheapestPrice: 949,
           name: "Apple iPad Pro 11-inch Wi-Fi 256GB",
           lowestPrice: 949,
           cheapestRetailer: "Walmart",
@@ -178,7 +177,6 @@ describe("searchItems handler", () => {
       expect.objectContaining({
         name: "Apple 11-inch iPad Air M3 Wi-Fi 128GB - Blue",
         lowestPrice: 549,
-        cheapestPrice: 549,
         cheapestRetailer: "Walmart"
       })
     );

@@ -74,9 +74,9 @@ describe("productService aggregation", () => {
 
     const [result] = await searchProductsAcrossRetailers("Apple iPad Pro 11-inch 256GB");
 
-    expect(result.title).toBe("Apple iPad Pro 11-inch 256GB Wi-Fi");
+    expect(result.name).toBe("Apple iPad Pro 11-inch 256GB Wi-Fi");
     expect(result.url).toBe("https://bestbuy.com/ipad-pro");
-    expect(result.cheapestPrice).toBe(999);
+    expect(result.lowestPrice).toBe(999);
     expect(result.cheapestRetailer).toBe("BestBuy");
     expect(result.offers).toEqual([
       expect.objectContaining({
@@ -111,7 +111,7 @@ describe("productService aggregation", () => {
     expect(results).toHaveLength(1);
     expect(results[0]).toEqual(
       expect.objectContaining({
-        title: "Apple 11-inch iPad Air M4 chip Wi-Fi 128GB Blue",
+        name: "Apple 11-inch iPad Air M4 chip Wi-Fi 128GB Blue",
         cheapestRetailer: "BestBuy"
       })
     );
@@ -149,7 +149,7 @@ describe("productService aggregation", () => {
     const results = await searchProductsAcrossRetailers("ipad pro");
 
     expect(results).toHaveLength(1);
-    expect(results[0].title).toBe("Apple 11-inch iPad Pro M4 Wi-Fi 256GB");
+    expect(results[0].name).toBe("Apple 11-inch iPad Pro M4 Wi-Fi 256GB");
   });
 
   it("returns up to ten product groups by default", async () => {

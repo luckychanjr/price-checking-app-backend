@@ -33,22 +33,20 @@ export const handler = async (event) => {
       ? buildWishlistItemFromProduct(selectedProduct)
       : await getProductAcrossRetailers(input);
 
-    if (!result || !result.title || !result.offers) {
+    if (!result || !(result.name || result.title) || !result.offers) {
       throw new Error("Invalid product data returned");
     }
 
-    const id = generateId();
+    const itemId = generateId();
     const createdAt = new Date().toISOString();
     const item = {
-      id,
-      itemId: id,
-      title: result.title,
+      itemId,
       name: result.name || result.title,
       sourceInput: result.sourceInput || input || result.url || result.title,
       image: result.image || result.offers?.[0]?.image || null,
       url: result.url || result.offers?.[0]?.url || null,
-      cheapestPrice: result.cheapestPrice,
       lowestPrice: result.lowestPrice ?? result.cheapestPrice,
+      ...(result.originalPrice ? { originalPrice: result.originalPrice } : {}),
       cheapestRetailer: result.cheapestRetailer,
       createdAt,
       lastUpdated: createdAt,

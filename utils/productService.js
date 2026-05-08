@@ -81,12 +81,10 @@ function summarizeProduct(product, sourceInput) {
   }
 
   return {
-    title: product.name,
     name: product.name,
     image: product.image || null,
     url: product.url || null,
     sourceInput,
-    cheapestPrice: product.price,
     lowestPrice: product.price,
     ...(product.originalPrice ? { originalPrice: product.originalPrice } : {}),
     cheapestRetailer: product.retailer,
@@ -140,7 +138,7 @@ export async function getProductAcrossRetailers(input) {
 }
 
 export function buildWishlistItemFromProduct(product) {
-  if (!product || !(product.title || product.name) || !Array.isArray(product.offers)) {
+  if (!product || !(product.name || product.title) || !Array.isArray(product.offers)) {
     throw new Error("Invalid selected product");
   }
 
@@ -155,12 +153,10 @@ export function buildWishlistItemFromProduct(product) {
   const bestOffer = sortedOffers[0];
 
   return {
-    title: product.title || product.name || bestOffer.name,
     name: product.name || product.title || bestOffer.name,
     image: product.image || bestOffer.image || null,
     url: product.url || bestOffer.url || null,
     sourceInput: product.sourceInput || product.url || product.name || product.title || "",
-    cheapestPrice: Number(product.cheapestPrice ?? product.lowestPrice ?? bestOffer.price),
     lowestPrice: Number(product.lowestPrice ?? product.cheapestPrice ?? bestOffer.price),
     ...(bestOffer.originalPrice ? { originalPrice: bestOffer.originalPrice } : {}),
     cheapestRetailer: product.cheapestRetailer || bestOffer.retailer,

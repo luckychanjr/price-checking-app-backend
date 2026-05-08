@@ -191,12 +191,10 @@ function toSearchResult(product, sourceInput) {
   };
 
   return {
-    title: product.name,
     name: product.name,
     image: product.image || null,
     url: normalizedUrl,
     sourceInput,
-    cheapestPrice: product.salePrice,
     lowestPrice: product.salePrice,
     ...(originalPrice ? { originalPrice } : {}),
     cheapestRetailer: "BestBuy",

@@ -36,12 +36,10 @@ function toSearchResult(product, sourceInput) {
   };
 
   return {
-    title: product.name,
     name: product.name,
     image: product.image || null,
     url: product.url || null,
     sourceInput,
-    cheapestPrice: product.price,
     lowestPrice: product.price,
     ...(product.originalPrice ? { originalPrice: product.originalPrice } : {}),
     cheapestRetailer: product.retailer,
@@ -83,7 +81,11 @@ function getOfferRetailers(offers) {
 }
 
 function summarizeClusterItem(cluster) {
-  const primaryItem = cluster[0];
+  const {
+    title: _title,
+    cheapestPrice: _cheapestPrice,
+    ...primaryItem
+  } = cluster[0];
   const offers = cluster
     .flatMap(item => getItemOffers(item))
     .filter(offer => typeof offer?.price === "number")
@@ -96,7 +98,6 @@ function summarizeClusterItem(cluster) {
 
   return {
     ...primaryItem,
-    cheapestPrice: cheapestOffer.price,
     lowestPrice: cheapestOffer.price,
     ...(cheapestOffer.originalPrice ? { originalPrice: cheapestOffer.originalPrice } : {}),
     cheapestRetailer: cheapestOffer.retailer,

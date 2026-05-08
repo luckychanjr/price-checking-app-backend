@@ -53,7 +53,7 @@ export async function refreshStoredItem(currentItem) {
 
   const result = await getProductAcrossRetailers(refreshInput);
 
-  if (!result || !result.title || !result.offers) {
+  if (!result || !(result.name || result.title) || !result.offers) {
     throw new Error("Invalid product data returned");
   }
 
@@ -101,17 +101,20 @@ export async function refreshStoredItem(currentItem) {
     cheapestOffer?.originalPrice ??
     result.originalPrice ??
     currentItem?.originalPrice;
+  const {
+    id: _id,
+    title: _title,
+    cheapestPrice: _cheapestPrice,
+    ...canonicalCurrentItem
+  } = currentItem;
 
   return {
-    ...currentItem,
-    id: currentItem.id || currentItem.itemId,
+    ...canonicalCurrentItem,
     itemId: currentItem.itemId || currentItem.id,
-    title: currentItem.title || refreshedDisplayName,
     name: currentDisplayName || refreshedDisplayName,
     sourceInput: currentItem.sourceInput || refreshInput,
     image: refreshedImage,
     url: refreshedUrl,
-    cheapestPrice: refreshedPrice,
     lowestPrice: result.lowestPrice ?? result.cheapestPrice ?? refreshedPrice,
     ...(refreshedOriginalPrice ? { originalPrice: refreshedOriginalPrice } : {}),
     cheapestRetailer:
